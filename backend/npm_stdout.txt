@@ -1,0 +1,38 @@
+
+> backend@1.0.0 dev
+> nodemon src/app.js
+
+[33m[nodemon] 3.1.14[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node src/app.js`[39m
+◇ injected env (2) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+Serveur backend démarré sur http://localhost:5000
+Connecté à la base de données SQLite
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/app.js`[39m
+◇ injected env (2) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Serveur backend démarré sur http://localhost:5000
+Connecté à la base de données SQLite
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/app.js`[39m
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/app.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/app.js`[39m
+◇ injected env (2) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+Serveur backend démarré sur http://localhost:5000
+Connecté à la base de données SQLite
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/app.js`[39m
+◇ injected env (2) from .env // tip: ⌘ enable debugging { debug: true }
+Serveur backend démarré sur http://localhost:5000
+Connecté à la base de données SQLite
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/app.js`[39m
+◇ injected env (2) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+Serveur backend démarré sur http://localhost:5000
+Connecté à la base de données SQLite
