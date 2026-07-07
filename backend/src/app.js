@@ -1,48 +1,53 @@
+// Point d'entrée principal du backend Express.
+// Ici on initialise l'application, la base SQLite et on branche les routes d'authentification.
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const db = require('./config/db');
+const { successResponse, errorResponse } = require('./utils/responseBuilder');
+const authRoutes = require('./routes/authRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
+const disputeRoutes = require('./routes/disputeRoutes');
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const DB_PATH = path.resolve(__dirname, process.env.DB_PATH || '../../database/database.sqlite');
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Erreur de connexion à la base de données:', err.message);
-  } else {
-    console.log('Connecté à la base de données SQLite');
-  }
-});
-
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json(successResponse({ status: 'ok', timestamp: new Date().toISOString() }));
 });
 
 app.get('/api/db-check', (_req, res) => {
   db.get("SELECT name FROM sqlite_master WHERE type='table'", (err, row) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json(errorResponse(err.message, { errorCode: '00002' }));
     }
-    res.json({ tables: row ? row.name : 'aucune table trouvée' });
+    res.json(successResponse({ tables: row ? row.name : 'aucune table trouvée' }));
   });
 });
 
+// Branche les routes d'authentification (POST /login, GET /me).
+app.use('/', authRoutes);
+
+// Branche les routes des transactions (GET /transactions).
+app.use('/', transactionRoutes);
+
+// Branche les routes des litiges (POST /disputes).
+app.use('/', disputeRoutes);
+
 app.use((_req, res) => {
-  res.status(404).json({ error: 'Route non trouvée' });
+  res.status(404).json(errorResponse('Route non trouvée', { errorCode: '00004' }));
 });
 
-app.use((err, _req, res, _next) => {
-  console.error('Erreur serveur:', err.stack);
-  res.status(500).json({ error: 'Erreur interne du serveur' });
-});
+// Middleware de gestion centralisée des erreurs (AppError + erreurs imprévues)
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur http://localhost:${PORT}`);
