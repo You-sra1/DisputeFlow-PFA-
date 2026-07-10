@@ -21,3 +21,27 @@ Thumbs.db
 
 # Logs
 *.log
+*.err
+
+# Office temp files
+~$*
+
+# Build outputs
+dist/
+frontend/dist/
+
+# Old bundle files (pre-Vite)
+frontend/public/bundle.*
+frontend/public/App.css
+
+# Root package files (belongs in subdirectories)
+/package.json
+/package-lock.json
+
+# Temp audit files
+backend/_db_verify.js
+backend/audit_routes.js
+backend/backend_file_list.json
+backend/backend_files.json
+backend/stderr.txt
+backend/stdout.txt

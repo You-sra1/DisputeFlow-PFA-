@@ -19,7 +19,11 @@ async function verifyPassword(plainPassword, storedPassword) {
   }
 
   if (isBcryptHash(storedPassword)) {
-    return bcrypt.compare(plainPassword, storedPassword);
+    try {
+      return await bcrypt.compare(plainPassword, storedPassword);
+    } catch {
+      return false;
+    }
   }
 
   return plainPassword === storedPassword;
@@ -40,32 +44,26 @@ async function migratePasswordToHash(user, plainPassword) {
 // contrôle les informations en base, puis renvoie un token et les infos utilisateur.
 async function login(req, res) {
   try {
-    // On récupère les données envoyées par le client.
-    // requestInfo contient des métadonnées de traçabilité, tandis que email/password sont utilisés pour l'authentification.
     const { requestInfo, email, password } = req.body;
 
     if (requestInfo && requestInfo.requestUID) {
       console.log(`Login reçu avec requestUID=${requestInfo.requestUID}`);
     }
 
-    // Vérifie que les champs obligatoires existent avant toute logique métier.
-    // ── Email ou password manquant → errorCode 40010 ──
     if (!email || !password) {
       return res.status(400).json(
         errorResponse('Email and password are required', { errorCode: '40010' })
       );
     }
 
-    // Recherche l'utilisateur dans la base via son email.
     const user = await userModel.findByEmail(email);
-    // ── Identifiants invalides → errorCode 40101 (on ne précise pas si c'est l'email ou le password) ──
+
     if (!user) {
       return res.status(401).json(
         errorResponse('Invalid email or password', { errorCode: '40101' })
       );
     }
 
-    // Vérifie si le mot de passe saisi correspond bien à celui enregistré.
     const passwordValide = await verifyPassword(password, user.password);
     if (!passwordValide) {
       return res.status(401).json(
@@ -73,12 +71,10 @@ async function login(req, res) {
       );
     }
 
-    // Si le mot de passe n'est pas encore hashé, on le transforme pour renforcer la sécurité.
     if (!isBcryptHash(user.password)) {
       await migratePasswordToHash(user, password);
     }
 
-    // Génère un JWT qui sera utilisé pour authentifier les prochaines requêtes du client.
     const token = generateToken({ id: user.id, email: user.email, role: user.role });
 
     return res.status(200).json(
@@ -93,7 +89,7 @@ async function login(req, res) {
       })
     );
   } catch (err) {
-    console.error('Erreur login :', err);
+    console.error('Erreur login :', err.stack || err);
     return res.status(500).json(
       errorResponse('Internal server error', { errorCode: '50000' })
     );

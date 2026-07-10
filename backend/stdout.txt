@@ -1,3 +1,0 @@
-◇ injected env (2) from .env // tip: ⌘ override existing { override: true }
-Serveur backend démarré sur http://localhost:5000
-Connecté à la base de données SQLite

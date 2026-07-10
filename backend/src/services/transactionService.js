@@ -63,4 +63,15 @@ function getTransactions(cardId, userId, startDate, endDate) {
   });
 }
 
-module.exports = { findCardByNumber, findTransactionById, getTransactions };
+// Recherche la première carte active d'un utilisateur par son ID.
+// Retourne la ligne complète ou undefined si aucune carte trouvée.
+function findCardByUserId(userId) {
+  return new Promise((resolve, reject) => {
+    db.get('SELECT id, userId FROM cards WHERE userId = ? AND isActive = 1 LIMIT 1', [userId], (err, row) => {
+      if (err) return reject(new AppError('Internal server error', 500, '50000'));
+      resolve(row);
+    });
+  });
+}
+
+module.exports = { findCardByNumber, findCardByUserId, findTransactionById, getTransactions };

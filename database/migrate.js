@@ -13,18 +13,19 @@ const db = new sqlite3.Database(DB_PATH);
 // ─── Activation des contraintes de clés étrangères ───────────────────────────
 // SQLite ne les active pas par défaut ; cette PRAGMA est nécessaire au
 // niveau session pour garantir l'intégrité référentielle.
-db.run('PRAGMA foreign_keys = ON');
+db.serialize(() => {
+  db.run('PRAGMA foreign_keys = ON');
 
-// ─── Migration : suppression des anciennes tables disputes ──────────────────
-// Si la base existait déjà avec l'ancien schéma (statuts OPEN/IN_REVIEW/...),
-// on recrée les tables pour appliquer les nouveaux statuts et motifs du CDC.
-// L'ordre de suppression respecte les contraintes de clés étrangères.
-db.run(`DROP TABLE IF EXISTS dispute_documents`);
-db.run(`DROP TABLE IF EXISTS dispute_comments`);
-db.run(`DROP TABLE IF EXISTS dispute_status_history`);
-db.run(`DROP TABLE IF EXISTS disputes`);
+  // ─── Migration : suppression des anciennes tables disputes ──────────────────
+  // Si la base existait déjà avec l'ancien schéma (statuts OPEN/IN_REVIEW/...),
+  // on recrée les tables pour appliquer les nouveaux statuts et motifs du CDC.
+  // L'ordre de suppression respecte les contraintes de clés étrangères.
+  db.run(`DROP TABLE IF EXISTS dispute_documents`);
+  db.run(`DROP TABLE IF EXISTS dispute_comments`);
+  db.run(`DROP TABLE IF EXISTS dispute_status_history`);
+  db.run(`DROP TABLE IF EXISTS disputes`);
 
-// ─── Table : users ───────────────────────────────────────────────────────────
+  // ─── Table : users ───────────────────────────────────────────────────────────
 // Regroupe tous les utilisateurs de l'application : clients et opérateurs.
 //   id        : identifiant métier (ex: CLIENT001, OPERATOR001)
 //   role      : 'CLIENT'  → porteur de carte, initie les litiges
@@ -198,6 +199,7 @@ db.run(`
 
 // ─── Finalisation ────────────────────────────────────────────────────────────
 // On referme la connexion une fois toutes les migrations terminées.
+});
 db.close((err) => {
   if (err) {
     console.error('Erreur lors de la fermeture de la base :', err.message);

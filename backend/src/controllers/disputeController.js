@@ -139,11 +139,13 @@ const VALID_STATUSES = [
 // Supporte les filtres optionnels : status (ou "ALL"), startDate, endDate.
 async function getDisputes(req, res, next) {
   try {
-    const { requestInfo, status, startDate, endDate } = req.body;
+    // Supporte body ET query params (le frontend envoie body avec fetch même en GET)
+    const source = req.method === 'GET' && Object.keys(req.body || {}).length === 0 ? req.query : { ...req.query, ...req.body };
+    const { requestInfo, status, startDate, endDate } = source;
     const { role, id: userId } = req.user; // issus du token JWT (authenticate)
 
-    // ── 1. Validation requestInfo ─────────────────────────────────────────────
-    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+    // ── 1. Validation requestInfo (only for non-GET or when explicitly provided) ──
+    if (requestInfo && (!requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID)) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
 
@@ -187,4 +189,330 @@ async function getDisputes(req, res, next) {
   }
 }
 
-module.exports = { createDispute, getDisputes };
+// ─── PRISE EN CHARGE D'UN LITIGE ─────────────────────────────────────────────
+
+// PUT /review
+// Permet à un OPERATOR de passer un litige de SUBMITTED à UNDER_REVIEW.
+// Valide requestInfo, disputeId et comment, puis délègue la logique métier.
+async function review(req, res, next) {
+  try {
+    const { requestInfo, disputeId, comment } = req.body;
+    const operatorId = req.user.id; // issu du token JWT (authenticate)
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    // disputeId obligatoire : on ne peut pas prendre en charge un litige sans son identifiant
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation comment ────────────────────────────────────────────────
+    // comment obligatoire : l'opérateur doit justifier la prise en charge
+    if (!comment || typeof comment !== 'string' || comment.trim().length === 0) {
+      throw new AppError('Missing comment', 400, '40031');
+    }
+
+    // ── 4. Appel du service ──────────────────────────────────────────────────
+    const result = await disputeService.reviewDispute(disputeId, operatorId, comment);
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      reviewedBy: result.reviewedBy,
+      reviewDate: result.reviewDate,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── DEMANDE D'INFORMATIONS COMPLÉMENTAIRES ─────────────────────────────────
+
+// PUT /request-info
+// Permet à un OPERATOR de passer un litige de UNDER_REVIEW à WAITING_FOR_INFORMATION.
+// Valide requestInfo, disputeId et message, puis délègue la logique métier.
+async function requestInfo(req, res, next) {
+  try {
+    const { requestInfo, disputeId, message, comment } = req.body;
+    const operatorId = req.user.id; // issu du token JWT (authenticate)
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    // disputeId obligatoire : on ne peut pas demander d'infos sans cibler un litige
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation message ────────────────────────────────────────────────
+    // message obligatoire : l'opérateur doit préciser quelles informations sont demandées
+    // Accepte "message" ou "comment" (le frontend envoie "comment")
+    const effectiveMessage = message || comment;
+    if (!effectiveMessage || typeof effectiveMessage !== 'string' || effectiveMessage.trim().length === 0) {
+      throw new AppError('Missing message', 400, '40033');
+    }
+
+    // ── 4. Appel du service ──────────────────────────────────────────────────
+    const result = await disputeService.requestInfo(disputeId, operatorId, effectiveMessage);
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      requestedInformation: result.requestedInformation,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── APPROBATION D'UN LITIGE ─────────────────────────────────────────────────
+
+// PUT /approve
+// Permet à un OPERATOR d'approuver un litige (UNDER_REVIEW/WAITING → APPROVED).
+// Valide requestInfo, disputeId et comment, puis délègue la logique métier.
+async function approve(req, res, next) {
+  try {
+    const { requestInfo, disputeId, comment } = req.body;
+    const operatorId = req.user.id; // issu du token JWT (authenticate)
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    // disputeId obligatoire : on ne peut pas approuver un litige sans son identifiant
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation comment ────────────────────────────────────────────────
+    // comment obligatoire : l'opérateur doit justifier l'approbation
+    if (!comment || typeof comment !== 'string' || comment.trim().length === 0) {
+      throw new AppError('Missing comment', 400, '40031');
+    }
+
+    // ── 4. Appel du service ──────────────────────────────────────────────────
+    const result = await disputeService.approveDispute(disputeId, operatorId, comment);
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      approvedBy: result.approvedBy,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── REJET D'UN LITIGE ───────────────────────────────────────────────────────
+
+// PUT /reject
+// Permet à un OPERATOR de rejeter un litige (UNDER_REVIEW/WAITING → REJECTED).
+// Valide requestInfo, disputeId, reason et comment (optionnel), puis délègue.
+async function reject(req, res, next) {
+  try {
+    const { requestInfo, disputeId, reason, comment } = req.body;
+    const operatorId = req.user.id; // issu du token JWT (authenticate)
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    // disputeId obligatoire : on ne peut pas rejeter un litige sans son identifiant
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation reason ─────────────────────────────────────────────────
+    // reason obligatoire : l'opérateur doit fournir le motif du rejet
+    // Fallback : si reason n'est pas fourni, on utilise comment (le frontend envoie "comment")
+    const effectiveReason = reason || comment;
+    if (!effectiveReason || typeof effectiveReason !== 'string' || effectiveReason.trim().length === 0) {
+      throw new AppError('Missing reason', 400, '40032');
+    }
+
+    // ── 4. comment est optionnel ─────────────────────────────────────────────
+    // Si présent, on le passe au service ; sinon undefined
+
+    // ── 5. Appel du service ──────────────────────────────────────────────────
+    const result = await disputeService.rejectDispute(disputeId, operatorId, effectiveReason, comment || '');
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      reason: result.reason,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── INITIATION D'UN CHARGEBACK ────────────────────────────────────────────────
+
+// PUT /chargeback
+// Permet à un OPERATOR de lancer la procédure de chargeback sur un litige
+// approuvé (APPROVED → CHARGEBACK_INITIATED).
+// Valide requestInfo, disputeId, chargebackReasonCode, network, comment.
+async function chargeback(req, res, next) {
+  try {
+    const { requestInfo, disputeId, chargebackReasonCode, network, comment } = req.body;
+    const operatorId = req.user.id;
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation chargebackReasonCode ────────────────────────────────────
+    // chargebackReasonCode obligatoire : code motif chargeback fourni par l'opérateur (ex: "4837")
+    if (!chargebackReasonCode || typeof chargebackReasonCode !== 'string') {
+      throw new AppError('Missing chargebackReasonCode', 400, '40040');
+    }
+
+    // ── 4. Validation network ─────────────────────────────────────────────────
+    // network obligatoire, doit être "Visa" ou "Mastercard" (validé plus finement dans le service)
+    if (!network || typeof network !== 'string') {
+      throw new AppError('Invalid network, must be Visa or Mastercard', 400, '40041');
+    }
+
+    // ── 5. comment est optionnel ──────────────────────────────────────────────
+    // Si non fourni, on passe une chaîne vide au service
+    const safeComment = comment || '';
+
+    // ── 6. Appel du service ───────────────────────────────────────────────────
+    const result = await disputeService.chargebackDispute(
+      disputeId, operatorId, chargebackReasonCode, network, safeComment
+    );
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      chargebackReference: result.chargebackReference,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── REMBOURSEMENT APRÈS CHARGEBACK ────────────────────────────────────────────
+
+// PUT /refund
+// Permet à un OPERATOR de finaliser un chargeback par un remboursement
+// (CHARGEBACK_INITIATED → REFUND_COMPLETED).
+// Valide requestInfo, disputeId, refundAmount, currency, refundMethod.
+async function refund(req, res, next) {
+  try {
+    const { requestInfo, disputeId, refundAmount, currency, refundMethod } = req.body;
+    const operatorId = req.user.id;
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation refundAmount ────────────────────────────────────────────
+    // refundAmount obligatoire : nombre strictement positif, sinon on rejette
+    if (refundAmount === undefined || refundAmount === null || typeof refundAmount !== 'number' || refundAmount <= 0) {
+      throw new AppError('Invalid refundAmount', 400, '40050');
+    }
+
+    // ── 4. Validation currency ────────────────────────────────────────────────
+    // currency obligatoire : sera comparée à la devise du litige dans le service
+    if (!currency || typeof currency !== 'string') {
+      throw new AppError('Invalid or mismatched currency', 400, '40052');
+    }
+
+    // ── 5. Validation refundMethod ────────────────────────────────────────────
+    // refundMethod obligatoire : "CARD_CREDIT" ou "BANK_TRANSFER"
+    const allowedMethods = ['CARD_CREDIT', 'BANK_TRANSFER'];
+    if (!refundMethod || !allowedMethods.includes(refundMethod)) {
+      throw new AppError('Invalid refundMethod', 400, '40053');
+    }
+
+    // ── 6. Appel du service ───────────────────────────────────────────────────
+    const result = await disputeService.refundDispute(
+      disputeId, operatorId, refundAmount, currency, refundMethod
+    );
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      refundAmount: result.refundAmount,
+      currency: result.currency,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── CLÔTURE D'UN DOSSIER DE LITIGE ────────────────────────────────────────────
+
+// PUT /close
+// Permet à un OPERATOR de clôturer définitivement un dossier de litige
+// (REJECTED → CLOSED ou REFUND_COMPLETED → CLOSED).
+// Valide requestInfo, disputeId, closureReason, comment.
+async function close(req, res, next) {
+  try {
+    const { requestInfo, disputeId, closureReason, comment } = req.body;
+    const operatorId = req.user.id;
+
+    // ── 1. Validation requestInfo ─────────────────────────────────────────────
+    // requestInfo obligatoire : traçabilité de l'appel côté client
+    if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
+      throw new AppError('Missing or invalid requestInfo', 400, '40001');
+    }
+
+    // ── 2. Validation disputeId ──────────────────────────────────────────────
+    // disputeId obligatoire : on ne peut pas clôturer sans identifiant
+    if (!disputeId || typeof disputeId !== 'string') {
+      throw new AppError('Missing disputeId', 400, '40030');
+    }
+
+    // ── 3. Validation closureReason ──────────────────────────────────────────
+    // closureReason obligatoire : motif de clôture parmi les 4 valeurs autorisées
+    // (CASE_RESOLVED, REJECTED_FINAL, REFUND_ISSUED, OTHER)
+    const validClosureReasons = ['CASE_RESOLVED', 'REJECTED_FINAL', 'REFUND_ISSUED', 'OTHER'];
+    if (!closureReason || !validClosureReasons.includes(closureReason)) {
+      throw new AppError('Missing or invalid closureReason', 400, '40060');
+    }
+
+    // ── 4. Validation comment ─────────────────────────────────────────────────
+    // comment obligatoire : l'opérateur doit justifier la clôture
+    if (!comment || typeof comment !== 'string' || comment.trim().length === 0) {
+      throw new AppError('Missing comment', 400, '40031');
+    }
+
+    // ── 5. Appel du service ───────────────────────────────────────────────────
+    const result = await disputeService.closeDispute(disputeId, operatorId, closureReason, comment);
+
+    return res.status(200).json(successResponse({
+      disputeId: result.disputeId,
+      status: result.status,
+      closedDate: result.closedDate,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { createDispute, getDisputes, review, requestInfo, approve, reject, chargeback, refund, close };

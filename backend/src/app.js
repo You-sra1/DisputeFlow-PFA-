@@ -9,6 +9,7 @@ const { successResponse, errorResponse } = require('./utils/responseBuilder');
 const authRoutes = require('./routes/authRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const disputeRoutes = require('./routes/disputeRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -32,22 +33,27 @@ app.get('/api/db-check', (_req, res) => {
   });
 });
 
-// Branche les routes d'authentification (POST /login, GET /me).
-app.use('/', authRoutes);
+// Branche les routes d'authentification (POST /api/login, GET /api/me).
+app.use('/api', authRoutes);
 
-// Branche les routes des transactions (GET /transactions).
-app.use('/', transactionRoutes);
+// Branche les routes des transactions (GET /api/transactions).
+app.use('/api', transactionRoutes);
 
-// Branche les routes des litiges (POST /disputes).
-app.use('/', disputeRoutes);
+// Branche les routes des litiges (POST /api/disputes).
+app.use('/api', disputeRoutes);
+
+// Branche les routes du dashboard (GET /api/dashboard/stats, etc.).
+app.use('/api', dashboardRoutes);
+
+// Middleware de gestion centralisée des erreurs (AppError + erreurs imprévues)
+// Doit être déclaré AVANT le 404 catch-all pour intercepter les erreurs
+// des routeurs asynchrones (Express 5 ne les catch pas correctement sinon).
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 app.use((_req, res) => {
   res.status(404).json(errorResponse('Route non trouvée', { errorCode: '00004' }));
 });
-
-// Middleware de gestion centralisée des erreurs (AppError + erreurs imprévues)
-const errorHandler = require('./middleware/errorHandler');
-app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Serveur backend démarré sur http://localhost:${PORT}`);
