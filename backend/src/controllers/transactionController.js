@@ -79,40 +79,20 @@ async function getTransactions(req, res, next) {
   }
 }
 
-// GET /transactions/:id
-// Retourne le détail d'une transaction spécifique pour le client authentifié.
-// Vérifie que la transaction existe et appartient au client.
-async function getTransactionById(req, res, next) {
+// GET /cards
+// Retourne la liste des cartes actives du client authentifié.
+async function getCards(req, res, next) {
   try {
-    const { id } = req.params;
-
-    const transaction = await transactionService.findTransactionById(id);
-
-    // ── Transaction introuvable ──
-    if (!transaction) {
-      throw new AppError('Transaction not found', 404, '40401');
-    }
-
-    // ── La transaction n'appartient pas au client ──
-    if (transaction.userId !== req.user.id) {
-      throw new AppError('Access denied to this transaction', 403, '40301');
-    }
-
-    return res.status(200).json(successResponse({
-      transactionId: transaction.id,
-      cardId: transaction.cardId,
-      merchant: transaction.merchant,
-      merchantCategory: transaction.merchantCategory,
-      amount: transaction.amount,
-      currency: transaction.currency,
-      status: transaction.status,
-      transactionDate: transaction.transactionDate,
-      description: transaction.description,
-      createdAt: transaction.createdAt,
+    const cards = await transactionService.findCardsByUserId(req.user.id);
+    const data = cards.map((c) => ({
+      cardId: c.id,
+      cardNumber: c.cardNumber,
+      brand: c.cardType,
     }));
+    return res.status(200).json(successResponse(data));
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { getTransactions, getTransactionById };
+module.exports = { getTransactions, getCards };

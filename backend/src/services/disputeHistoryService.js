@@ -5,7 +5,6 @@
 
 const { randomUUID } = require('crypto');
 const db = require('../config/db');
-const AppError = require('../utils/AppError');
 
 // Exécute une requête db.run dans une promesse (helper interne).
 function dbRun(sql, params) {

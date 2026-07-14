@@ -46,13 +46,9 @@ async function login(req, res) {
   try {
     const { requestInfo, email, password } = req.body;
 
-    if (requestInfo && requestInfo.requestUID) {
-      console.log(`Login reçu avec requestUID=${requestInfo.requestUID}`);
-    }
-
     if (!email || !password) {
       return res.status(400).json(
-        errorResponse('Email and password are required', { errorCode: '40010' })
+        errorResponse('Email and password are required', { errorCode: '40070' })
       );
     }
 

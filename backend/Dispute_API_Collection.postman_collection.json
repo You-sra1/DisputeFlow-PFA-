@@ -1,0 +1,526 @@
+{
+  "info": {
+    "name": "Dispute Chargeback API (11 CDC endpoints + tests)",
+    "description": "Base URL : http://localhost:5000/api\n\nComptes de test (Password123) :\n  CLIENT   : client001@example.com\n  CLIENT   : client002@example.com\n  OPERATOR : operator@example.com\n\nWorkflow testé : TXN006 (aucun litige existant) → create → review → request-info → respond → approve → chargeback → refund → close\n\nFichier : backend/Dispute_API_Collection.postman_collection.json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api" },
+    { "key": "clientToken", "value": "" },
+    { "key": "operatorToken", "value": "" },
+    { "key": "newDisputeId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "AUTH",
+      "item": [
+        {
+          "name": "01 - POST /login (Client)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('00000');",
+            "pm.expect(d.data).to.have.property('token');",
+            "pm.expect(d.data.user.id).to.eql('CLIENT001');",
+            "pm.expect(d.data.user.role).to.eql('CLIENT');",
+            "pm.collectionVariables.set('clientToken', d.data.token);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"e1d38c5b-fd9e-42d0-9269-089d91d3d234\",\n    \"requestDate\": \"2026-07-14T09:00:00Z\",\n    \"userID\": \"anonymous\"\n  },\n  \"email\": \"client001@example.com\",\n  \"password\": \"Password123\"\n}" }
+          }
+        },
+        {
+          "name": "02 - POST /login (Operator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('00000');",
+            "pm.expect(d.data.user.role).to.eql('OPERATOR');",
+            "pm.collectionVariables.set('operatorToken', d.data.token);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"requestDate\": \"2026-07-14T09:00:00Z\",\n    \"userID\": \"anonymous\"\n  },\n  \"email\": \"operator@example.com\",\n  \"password\": \"Password123\"\n}" }
+          }
+        },
+        {
+          "name": "03 - GET /me (Client profile)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.id).to.eql('CLIENT001');",
+            "pm.expect(d.data.email).to.eql('client001@example.com');",
+            "pm.expect(d.data.role).to.eql('CLIENT');"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{clientToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "READ-ONLY (Cards & Transactions)",
+      "item": [
+        {
+          "name": "04 - GET /cards",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.length).to.be.above(0);",
+            "pm.expect(d.data[0]).to.have.property('cardId');",
+            "pm.expect(d.data[0]).to.have.property('cardNumber');",
+            "pm.expect(d.data[0]).to.have.property('brand');"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/cards",
+            "header": [{ "key": "Authorization", "value": "Bearer {{clientToken}}" }]
+          }
+        },
+        {
+          "name": "05 - GET /transactions (all)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.length).to.be.above(0);",
+            "pm.expect(d.data[0]).to.have.property('transactionId');",
+            "pm.expect(d.data[0]).to.have.property('merchant');",
+            "pm.expect(d.data[0]).to.have.property('amount');"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/transactions?startDate=2026-01-01&endDate=2026-12-31",
+            "header": [{ "key": "Authorization", "value": "Bearer {{clientToken}}" }]
+          }
+        },
+        {
+          "name": "06 - GET /transactions (filtered by date)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.length).to.be.above(0);",
+            "d.data.forEach(t => pm.expect(t.transactionDate >= '2026-06-15').to.be.true);",
+            "d.data.forEach(t => pm.expect(t.transactionDate <= '2026-07-10').to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/transactions?startDate=2026-06-15&endDate=2026-07-10",
+            "header": [{ "key": "Authorization", "value": "Bearer {{clientToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "DISPUTES - Read",
+      "item": [
+        {
+          "name": "07 - GET /disputes (ALL, Client)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.length).to.be.above(0);",
+            "d.data.forEach(i => { pm.expect(i).to.have.property('disputeId'); pm.expect(i).to.have.property('status'); });"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/disputes?status=ALL",
+            "header": [{ "key": "Authorization", "value": "Bearer {{clientToken}}" }]
+          }
+        },
+        {
+          "name": "08 - GET /disputes (filter SUBMITTED only)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.length).to.be.above(0);",
+            "d.data.forEach(i => pm.expect(i.status).to.eql('SUBMITTED'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/disputes?status=SUBMITTED",
+            "header": [{ "key": "Authorization", "value": "Bearer {{clientToken}}" }]
+          }
+        },
+        {
+          "name": "09 - GET /disputes (ALL, Operator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.length).to.be.above(0);",
+            "d.data.forEach(i => { pm.expect(i).to.have.property('clientName'); pm.expect(i).to.have.property('userID'); });"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/disputes?status=ALL",
+            "header": [{ "key": "Authorization", "value": "Bearer {{operatorToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "DISPUTES - Create",
+      "item": [
+        {
+          "name": "10 - POST /disputes (new dispute on TXN006)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('SUBMITTED');",
+            "pm.expect(d.data.transactionId).to.eql('TXN006');",
+            "pm.collectionVariables.set('newDisputeId', d.data.disputeId);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/disputes",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{clientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"684d92a6-9e8b-4a42-b29b-72f4cbf3a5ef\",\n    \"requestDate\": \"2026-07-14T09:20:00Z\",\n    \"userID\": \"CLIENT001\"\n  },\n  \"transactionId\": \"TXN006\",\n  \"reason\": \"UNAUTHORIZED_TRANSACTION\",\n  \"description\": \"Je n'ai pas autorisé cette transaction Apple Store.\",\n  \"claimAmount\": 199.99,\n  \"currency\": \"USD\"\n}" }
+          }
+        },
+        {
+          "name": "11 - POST /disputes (duplicate on TXN006 → 409)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40901');"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/disputes",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{clientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"684d92a6-9e8b-4a42-b29b-72f4cbf3a5ef\",\n    \"requestDate\": \"2026-07-14T09:21:00Z\",\n    \"userID\": \"CLIENT001\"\n  },\n  \"transactionId\": \"TXN006\",\n  \"reason\": \"FRAUD\",\n  \"description\": \"Deuxième tentative sur la même transaction.\",\n  \"claimAmount\": 199.99,\n  \"currency\": \"USD\"\n}" }
+          }
+        },
+        {
+          "name": "12 - POST /disputes (missing fields → 400)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40010');"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/disputes",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{clientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"684d92a6-9e8b-4a42-b29b-72f4cbf3a5ef\",\n    \"requestDate\": \"2026-07-14T09:22:00Z\",\n    \"userID\": \"CLIENT001\"\n  },\n  \"reason\": \"FRAUD\",\n  \"description\": \"Test sans transactionId.\",\n  \"claimAmount\": 100,\n  \"currency\": \"USD\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WORKFLOW (full lifecycle on new dispute)",
+      "description": "Test complet du workflow : SUBMITTED → UNDER_REVIEW → WAITING_FOR_INFORMATION → respond → UNDER_REVIEW → APPROVED → CHARGEBACK → REFUND → CLOSED",
+      "item": [
+        {
+          "name": "13 - PUT /review (SUBMITTED → UNDER_REVIEW)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('UNDER_REVIEW');",
+            "pm.expect(d.data.reviewedBy).to.eql('OPERATOR001');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/review",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"0f0a90af-2357-4cb5-b50b-4a5ef7cbec90\",\n    \"requestDate\": \"2026-07-14T10:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"{{newDisputeId}}\",\n  \"comment\": \"Dispute assigned for investigation.\"\n}" }
+          }
+        },
+        {
+          "name": "14 - PUT /request-info (UNDER_REVIEW → WAITING)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('WAITING_FOR_INFORMATION');",
+            "pm.expect(d.data.requestedInformation).to.be.a('string');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/request-info",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"2c1b1de7-a77e-4f55-a2fa-03d5d4a1ec98\",\n    \"requestDate\": \"2026-07-14T10:20:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"{{newDisputeId}}\",\n  \"message\": \"Merci de fournir la preuve d'identité et le relevé bancaire.\"\n}" }
+          }
+        },
+        {
+          "name": "15 - PUT /disputes/:id/respond (WAITING → UNDER_REVIEW, CLIENT)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('UNDER_REVIEW');",
+            "pm.expect(d.data.respondedBy).to.eql('CLIENT001');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/disputes/{{newDisputeId}}/respond",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{clientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"comment\": \"Voici les documents demandés : relevé bancaire et pièce d'identité.\"\n}" }
+          }
+        },
+        {
+          "name": "16 - PUT /approve (UNDER_REVIEW → APPROVED)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('APPROVED');",
+            "pm.expect(d.data.approvedBy).to.eql('OPERATOR001');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/approve",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"d3c85db7-8662-4b16-95db-c879bd54eb83\",\n    \"requestDate\": \"2026-07-14T11:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"{{newDisputeId}}\",\n  \"comment\": \"Evidence verified. Transaction not authorized by cardholder.\"\n}" }
+          }
+        },
+        {
+          "name": "17 - PUT /chargeback (APPROVED → CHARGEBACK_INITIATED)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('CHARGEBACK_INITIATED');",
+            "pm.expect(d.data).to.have.property('chargebackReference');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/chargeback",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"66bc2cc8-78a2-4f77-b920-0c9712afef1d\",\n    \"requestDate\": \"2026-07-14T11:30:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"{{newDisputeId}}\",\n  \"chargebackReasonCode\": \"4837\",\n  \"network\": \"Mastercard\",\n  \"comment\": \"Chargeback initiated.\"\n}" }
+          }
+        },
+        {
+          "name": "18 - PUT /refund (CHARGEBACK → REFUND_COMPLETED)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('REFUND_COMPLETED');",
+            "pm.expect(d.data.refundAmount).to.eql(199.99);",
+            "pm.expect(d.data.currency).to.eql('USD');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/refund",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"e10d2559-30aa-4bb6-86d7-b95a7b3fbe18\",\n    \"requestDate\": \"2026-07-14T12:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"{{newDisputeId}}\",\n  \"refundAmount\": 199.99,\n  \"currency\": \"USD\",\n  \"refundMethod\": \"CARD_CREDIT\"\n}" }
+          }
+        },
+        {
+          "name": "19 - PUT /close (REFUND_COMPLETED → CLOSED)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('CLOSED');",
+            "pm.expect(d.data).to.have.property('closedDate');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/close",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"d514d03d-2eb8-4e35-b1e5-4bcbdd83536f\",\n    \"requestDate\": \"2026-07-14T12:30:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"{{newDisputeId}}\",\n  \"closureReason\": \"REFUND_ISSUED\",\n  \"comment\": \"Dispute closed after successful refund.\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WORKFLOW (close from REJECTED on DSP005)",
+      "description": "DSP005 est au statut REJECTED → close : REJECTED → CLOSED",
+      "item": [
+        {
+          "name": "20 - PUT /close (DSP005 REJECTED → CLOSED)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var d = pm.response.json();",
+            "pm.expect(d.data.status).to.eql('CLOSED');",
+            "pm.expect(d.data.disputeId).to.eql('DSP005');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/close",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"bb19fc89-56a7-4561-b10d-baf7ea5b8cb3\",\n    \"requestDate\": \"2026-07-14T13:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP005\",\n  \"closureReason\": \"REJECTED_FINAL\",\n  \"comment\": \"Dossier clôturé après rejet.\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ERROR CASES (invalid transitions)",
+      "description": "Tests des transitions invalides qui doivent retourner 409",
+      "item": [
+        {
+          "name": "21 - PUT /review on UNDER_REVIEW (DSP002) → 409",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40906');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/review",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"0f0a90af-2357-4cb5-b50b-4a5ef7cbec90\",\n    \"requestDate\": \"2026-07-14T14:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP002\",\n  \"comment\": \"Trying review on UNDER_REVIEW.\"\n}" }
+          }
+        },
+        {
+          "name": "22 - PUT /approve on CHARGEBACK (DSP006) → 409",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40902');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/approve",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"d3c85db7-8662-4b16-95db-c879bd54eb83\",\n    \"requestDate\": \"2026-07-14T14:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP006\",\n  \"comment\": \"Trying approve on CHARGEBACK_INITIATED.\"\n}" }
+          }
+        },
+        {
+          "name": "23 - PUT /chargeback on CLOSED (DSP009) → 409",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40903');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/chargeback",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"66bc2cc8-78a2-4f77-b920-0c9712afef1d\",\n    \"requestDate\": \"2026-07-14T14:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP009\",\n  \"chargebackReasonCode\": \"4837\",\n  \"network\": \"Mastercard\",\n  \"comment\": \"Trying chargeback on CLOSED.\"\n}" }
+          }
+        },
+        {
+          "name": "24 - PUT /refund on UNDER_REVIEW (DSP002) → 409",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40904');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/refund",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"e10d2559-30aa-4bb6-86d7-b95a7b3fbe18\",\n    \"requestDate\": \"2026-07-14T14:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP002\",\n  \"refundAmount\": 67.50,\n  \"currency\": \"USD\",\n  \"refundMethod\": \"CARD_CREDIT\"\n}" }
+          }
+        },
+        {
+          "name": "25 - PUT /close on SUBMITTED (DSP001) → 409",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40905');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/close",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"d514d03d-2eb8-4e35-b1e5-4bcbdd83536f\",\n    \"requestDate\": \"2026-07-14T14:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP001\",\n  \"closureReason\": \"CASE_RESOLVED\",\n  \"comment\": \"Trying close on SUBMITTED.\"\n}" }
+          }
+        },
+        {
+          "name": "26 - PUT /request-info on SUBMITTED (DSP001) → 409",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40907');"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/request-info",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"2c1b1de7-a77e-4f55-a2fa-03d5d4a1ec98\",\n    \"requestDate\": \"2026-07-14T14:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"disputeId\": \"DSP001\",\n  \"message\": \"Trying request-info on SUBMITTED.\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ERROR CASES (authorization & validation)",
+      "item": [
+        {
+          "name": "27 - POST /disputes as OPERATOR → 403",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40300');"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/disputes",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"684d92a6-9e8b-4a42-b29b-72f4cbf3a5ef\",\n    \"requestDate\": \"2026-07-14T15:00:00Z\",\n    \"userID\": \"OPERATOR001\"\n  },\n  \"transactionId\": \"TXN006\",\n  \"reason\": \"FRAUD\",\n  \"description\": \"Operator trying to create dispute.\",\n  \"claimAmount\": 100,\n  \"currency\": \"USD\"\n}" }
+          }
+        },
+        {
+          "name": "28 - PUT /review as CLIENT → 403",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/review",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{clientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"0f0a90af-2357-4cb5-b50b-4a5ef7cbec90\",\n    \"requestDate\": \"2026-07-14T15:00:00Z\",\n    \"userID\": \"CLIENT001\"\n  },\n  \"disputeId\": \"DSP001\",\n  \"comment\": \"Client trying to review.\"\n}" }
+          }
+        },
+        {
+          "name": "29 - POST /login (bad credentials → 401)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40101');"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"e1d38c5b-fd9e-42d0-9269-089d91d3d234\",\n    \"requestDate\": \"2026-07-14T15:00:00Z\",\n    \"userID\": \"anonymous\"\n  },\n  \"email\": \"client001@example.com\",\n  \"password\": \"WrongPassword\"\n}" }
+          }
+        },
+        {
+          "name": "30 - POST /login (missing fields → 400)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "var d = pm.response.json();",
+            "pm.expect(d.errorCode).to.eql('40070');"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"requestInfo\": {\n    \"requestUID\": \"e1d38c5b-fd9e-42d0-9269-089d91d3d234\",\n    \"requestDate\": \"2026-07-14T15:00:00Z\",\n    \"userID\": \"anonymous\"\n  },\n  \"email\": \"client001@example.com\"\n}" }
+          }
+        }
+      ]
+    }
+  ]
+}

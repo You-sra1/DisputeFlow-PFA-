@@ -18,19 +18,6 @@ function findById(id) {
   });
 }
 
-function create({ id, name, email, password, role }) {
-  return new Promise((resolve, reject) => {
-    db.run(
-      'INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)',
-      [id, name, email, password, role],
-      function (err) {
-        if (err) return reject(err);
-        resolve({ id, name, email, role });
-      }
-    );
-  });
-}
-
 // Met à jour le mot de passe d'un utilisateur avec un hash bcrypt.
 function updatePassword(id, passwordHash) {
   return new Promise((resolve, reject) => {
@@ -41,13 +28,4 @@ function updatePassword(id, passwordHash) {
   });
 }
 
-function countUsers() {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT COUNT(*) as total FROM users', [], (err, row) => {
-      if (err) return reject(err);
-      resolve(row.total);
-    });
-  });
-}
-
-module.exports = { findByEmail, findById, create, updatePassword, countUsers };
+module.exports = { findByEmail, findById, updatePassword };

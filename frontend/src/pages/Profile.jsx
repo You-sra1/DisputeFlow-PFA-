@@ -7,11 +7,27 @@ export default function Profile() {
   return (
     <DashboardLayout breadcrumb="Home > Profile">
       <h1>Profile</h1>
+
       <div className="card">
-        <p><strong>Name:</strong> {user?.name}</p>
-        <p><strong>Email:</strong> {user?.email}</p>
-        <p><strong>Role:</strong> {user?.role}</p>
-        <p><strong>User ID:</strong> {user?.id}</p>
+        <div className="profile-field">
+          <label className="profile-label">Name</label>
+          <p className="profile-value">{user?.name}</p>
+        </div>
+
+        <div className="profile-field">
+          <label className="profile-label">Email</label>
+          <p className="profile-value">{user?.email}</p>
+        </div>
+
+        <div className="profile-field">
+          <label className="profile-label">Role</label>
+          <p className="profile-value">{user?.role}</p>
+        </div>
+
+        <div className="profile-field">
+          <label className="profile-label">User ID</label>
+          <p className="profile-value">{user?.id}</p>
+        </div>
       </div>
     </DashboardLayout>
   );

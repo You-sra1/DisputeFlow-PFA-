@@ -193,6 +193,7 @@ db.run(`
     fileType   TEXT NOT NULL,
     filePath   TEXT NOT NULL,
     fileSize   INTEGER,
+    fileContent TEXT,
     uploadedAt TEXT DEFAULT (datetime('now'))
   )
 `);

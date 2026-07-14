@@ -26,8 +26,6 @@ function authenticate(req, res, next) {
 // Middleware qui vérifie si l'utilisateur connecté possède un rôle autorisé.
 function authorize(...rolesAutorises) {
   return (req, res, next) => {
-    // ── Rôle insuffisant ou absent → errorCode 40300 ──
-    // Seul un utilisateur avec l'un des rôles autorisés peut accéder à la route
     if (!req.user || !rolesAutorises.includes(req.user.role)) {
       return res.status(403).json(errorResponse('Access denied', { errorCode: '40300' }));
     }

@@ -1,13 +1,16 @@
 import { Link } from 'react-router-dom';
 import StatusBadge from './StatusBadge';
+import { REASON_LABEL } from '../constants/statusConfig';
 
-export default function DisputesTable({ disputes, variant = 'client' }) {
-  if (!disputes || disputes.length === 0) {
+export default function DisputesTable({ disputes, variant = 'client', rows = Infinity, compact = false }) {
+  const visible = disputes ? disputes.slice(0, rows) : [];
+
+  if (!visible || visible.length === 0) {
     return <p className="empty-state">No disputes to display yet.</p>;
   }
 
   return (
-    <table className="data-table">
+    <table className={`data-table ${compact ? 'table-compact' : ''}`}>
       <thead>
         <tr>
           <th>Dispute ID</th>
@@ -20,7 +23,7 @@ export default function DisputesTable({ disputes, variant = 'client' }) {
         </tr>
       </thead>
       <tbody>
-        {disputes.map((d) => {
+        {visible.map((d) => {
           const isTerminal = ['REJECTED', 'CLOSED'].includes(d.status);
           return (
             <tr key={d.disputeId}>
@@ -32,7 +35,7 @@ export default function DisputesTable({ disputes, variant = 'client' }) {
               )}
               <td>{d.claimAmount ?? d.amount ?? '—'} {d.currency || ''}</td>
               {variant === 'operator' ? (
-                <td>{(d.reason || '').replace(/_/g, ' ')}</td>
+                <td>{REASON_LABEL[d.reason] || (d.reason || '').replace(/_/g, ' ')}</td>
               ) : (
                 <td>{d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}</td>
               )}

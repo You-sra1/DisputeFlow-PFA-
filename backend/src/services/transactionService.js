@@ -74,4 +74,19 @@ function findCardByUserId(userId) {
   });
 }
 
-module.exports = { findCardByNumber, findCardByUserId, findTransactionById, getTransactions };
+// Recherche toutes les cartes actives d'un utilisateur.
+// Retourne la liste des cartes (id, cardNumber, brand).
+function findCardsByUserId(userId) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      'SELECT id, cardNumber, cardType FROM cards WHERE userId = ? AND isActive = 1 ORDER BY id',
+      [userId],
+      (err, rows) => {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve(rows);
+      }
+    );
+  });
+}
+
+module.exports = { findCardByNumber, findCardByUserId, findCardsByUserId, findTransactionById, getTransactions };

@@ -1,15 +1,19 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { disputesAPI } from '../api';
-import { DISPUTE_REASONS } from '../constants/statusConfig';
+import { disputesAPI, transactionsAPI } from '../api';
+import { DISPUTE_REASONS, REASON_LABEL } from '../constants/statusConfig';
 
 export default function NewDispute() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const preselectedTxn = location.state?.transactionId || '';
+  const [transactions, setTransactions] = useState([]);
+  const [loadingTxns, setLoadingTxns] = useState(true);
   const [form, setForm] = useState({
-    transactionId: '',
+    transactionId: preselectedTxn,
     reason: DISPUTE_REASONS[0],
     description: '',
     claimAmount: '',
@@ -17,6 +21,19 @@ export default function NewDispute() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await transactionsAPI.list(token, user.id, {});
+        setTransactions(data || []);
+      } catch {
+        // ignore
+      } finally {
+        setLoadingTxns(false);
+      }
+    })();
+  }, []);
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -26,6 +43,7 @@ export default function NewDispute() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     try {
       const payload = { ...form, claimAmount: parseFloat(form.claimAmount) };
       const dispute = await disputesAPI.create(token, user.id, payload);
@@ -41,18 +59,24 @@ export default function NewDispute() {
     <DashboardLayout breadcrumb="Home > My Disputes > New Dispute">
       <h1>New Dispute</h1>
       <form className="card form-card" onSubmit={handleSubmit}>
-        <label>Transaction ID</label>
-        <input
+        <label>Transaction</label>
+        <select
           value={form.transactionId}
           onChange={(e) => update('transactionId', e.target.value)}
-          placeholder="TXN001"
           required
-        />
+        >
+          <option value="" disabled>{loadingTxns ? 'Loading transactions...' : 'Select a transaction'}</option>
+          {transactions.map((t) => (
+            <option key={t.transactionId} value={t.transactionId}>
+              {t.transactionId} — {t.merchant} — {t.amount} {t.currency}
+            </option>
+          ))}
+        </select>
 
         <label>Reason</label>
         <select value={form.reason} onChange={(e) => update('reason', e.target.value)}>
           {DISPUTE_REASONS.map((r) => (
-            <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
+            <option key={r} value={r}>{REASON_LABEL[r] || r.replace(/_/g, ' ')}</option>
           ))}
         </select>
 

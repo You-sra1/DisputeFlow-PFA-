@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { PreferencesProvider } from './context/PreferencesContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import ClientDashboard from './pages/ClientDashboard';
@@ -51,9 +52,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <PreferencesProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </PreferencesProvider>
     </BrowserRouter>
   );
 }

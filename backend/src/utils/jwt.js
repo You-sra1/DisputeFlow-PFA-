@@ -1,6 +1,11 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not defined in environment. Server cannot start.');
+  process.exit(1);
+}
+
 // Génère un token JWT à partir des informations utilisateur.
 function generateToken(user) {
   return jwt.sign(

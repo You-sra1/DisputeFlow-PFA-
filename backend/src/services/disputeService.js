@@ -11,16 +11,12 @@ const { recordStatusChange, recordComment } = require('./disputeHistoryService')
 // ─── GÉNÉRATION D'IDENTIFIANTS ──────────────────────────────────────────────
 
 // Génère un identifiant de litige au format DSP + compteur (ex: DSP001).
-// Interroge le dernier ID existant pour incrémenter.
+// Utilise COUNT(*) pour éviter les races conditions avec MAX(rowid).
 function generateDisputeId() {
   return new Promise((resolve, reject) => {
-    db.get(`SELECT id FROM disputes ORDER BY rowid DESC LIMIT 1`, [], (err, row) => {
+    db.get(`SELECT COUNT(*) AS count FROM disputes`, [], (err, row) => {
       if (err) return reject(new AppError('Internal server error', 500, '50000'));
-      let nextNum = 1;
-      if (row && row.id) {
-        const match = row.id.match(/^DSP(\d+)$/);
-        if (match) nextNum = parseInt(match[1], 10) + 1;
-      }
+      const nextNum = (row ? row.count : 0) + 1;
       resolve(`DSP${String(nextNum).padStart(3, '0')}`);
     });
   });
@@ -557,16 +553,11 @@ async function rejectDispute(disputeId, operatorId, reason, comment) {
 
 // Génère une référence de chargeback unique au format CB + année + compteur
 // incrémental à 6 chiffres (ex: CB202600001).
-// Interroge le dernier chargebackReference existant dans la base pour incrémenter.
+// Interroge le nombre total de chargebacks pour générer la référence.
+// Utilise COUNT(*) pour minimiser les risques de race condition.
 function generateChargebackReference() {
   return new Promise((resolve, reject) => {
     const year = new Date().getFullYear();
-    // On regarde s'il existe déjà des chargebackReference stockées dans un champ
-    // status_history (car le champ n'existe pas en base). On va chercher dans
-    // dispute_status_history une transition vers CHARGEBACK_INITIATED et extraire
-    // le commentaire qui contient la référence. Ou bien on peut simplement
-    // interroger les litiges au statut CHARGEBACK_INITIATED ou REFUND_COMPLETED
-    // et compter le nombre total de chargebacks jamais initiés.
     db.get(
       `SELECT COUNT(*) AS count FROM dispute_status_history WHERE toStatus = 'CHARGEBACK_INITIATED'`,
       [],
@@ -766,6 +757,45 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
   });
 }
 
+// ─── RÉPONSE DU CLIENT À UNE DEMANDE D'INFO ───────────────────────────────
+// WAITING_FOR_INFORMATION → UNDER_REVIEW
+// Note: controller already validates status and ownership before calling this.
+async function respondToInfoRequest(disputeId, userId, comment) {
+  const now = new Date().toISOString();
+
+  return new Promise((resolve, reject) => {
+    db.run('BEGIN TRANSACTION', (beginErr) => {
+      if (beginErr) {
+        return reject(new AppError('Internal server error', 500, '50000'));
+      }
+
+      const run = (sql, params) => new Promise((res, rej) => {
+        db.run(sql, params, function (runErr) {
+          if (runErr) rej(runErr);
+          else res(this);
+        });
+      });
+
+      run(`UPDATE disputes SET status = 'UNDER_REVIEW', updatedAt = ? WHERE id = ?`, [now, disputeId])
+        .then(() => recordStatusChange(disputeId, 'WAITING_FOR_INFORMATION', 'UNDER_REVIEW', userId, 'Client responded to information request'))
+        .then(() => recordComment(disputeId, userId, comment))
+        .then(() => {
+          db.run('COMMIT', (commitErr) => {
+            if (commitErr) {
+              db.run('ROLLBACK', () => {});
+              return reject(new AppError('Internal server error', 500, '50000'));
+            }
+            resolve({ disputeId, status: 'UNDER_REVIEW', respondDate: now });
+          });
+        })
+        .catch((sqlErr) => {
+          db.run('ROLLBACK', () => {});
+          reject(new AppError('Internal server error', 500, '50000'));
+        });
+    });
+  });
+}
+
 // ─── RECHERCHE DE LITIGES AVEC FILTRES ──────────────────────────────────────
 
 // Récupère la liste des litiges selon le rôle et les filtres fournis.
@@ -847,6 +877,7 @@ module.exports = {
   chargebackDispute,
   refundDispute,
   closeDispute,
+  respondToInfoRequest,
   // Consultation
   getDisputes,
 };

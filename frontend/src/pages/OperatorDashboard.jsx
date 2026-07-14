@@ -4,46 +4,42 @@ import KPICard from '../components/KPICard';
 import BarChartCard from '../components/BarChartCard';
 import DisputesTable from '../components/DisputesTable';
 import { useAuth } from '../context/AuthContext';
-import { disputesAPI, dashboardAPI } from '../api';
+import { disputesAPI } from '../api';
+import { STATUS_LABEL_FR, REASON_LABEL } from '../constants/statusConfig';
 
 const STATUS_COLORS = ['#1a56db', '#7ba9f4', '#22c55e', '#ef4444', '#f59e0b', '#9ca3af'];
 const REASON_COLORS = ['#1a56db', '#7ba9f4', '#22c55e', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#9ca3af'];
 
+function computeDistribution(items, key, labelMap) {
+  const counts = {};
+  items.forEach((item) => {
+    const val = item[key] || 'UNKNOWN';
+    counts[val] = (counts[val] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([name, count]) => ({ label: labelMap[name] || name.replace(/_/g, ' '), count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 export default function OperatorDashboard() {
   const { user, token } = useAuth();
   const [disputes, setDisputes] = useState([]);
-  const [statusDist, setStatusDist] = useState([]);
-  const [reasonDist, setReasonDist] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [dashboardEndpointsMissing, setDashboardEndpointsMissing] = useState(false);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
     setError('');
-
     try {
       const list = await disputesAPI.list(token, user.id, { status: 'ALL' });
       setDisputes(list || []);
     } catch (err) {
       setError(err.errorDescription || 'Unable to load disputes.');
+    } finally {
+      setLoading(false);
     }
-
-    try {
-      setStatusDist((await dashboardAPI.statusDistribution(token, user.id)) || []);
-    } catch (err) {
-      setDashboardEndpointsMissing(true);
-    }
-
-    try {
-      setReasonDist((await dashboardAPI.reasonDistribution(token, user.id)) || []);
-    } catch (err) {
-      setDashboardEndpointsMissing(true);
-    }
-
-    setLoading(false);
   }
 
   const total = disputes.length;
@@ -55,17 +51,14 @@ export default function OperatorDashboard() {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 10);
 
+  const topStatus = computeDistribution(disputes, 'status', STATUS_LABEL_FR).slice(0, 5);
+  const topReason = computeDistribution(disputes, 'reason', REASON_LABEL).slice(0, 5);
+
   return (
-    <DashboardLayout breadcrumb="Home / Dashboard" notifCount={3} showMenuIcon>
+    <DashboardLayout breadcrumb="Home / Dashboard" showMenuIcon>
       <h1>Dashboard</h1>
 
       {error && <p className="error-text">{error}</p>}
-      {dashboardEndpointsMissing && (
-        <p className="warning-text">
-          Les endpoints GET /dashboard/status-distribution et/ou /dashboard/reason-distribution
-          ne répondent pas — graphiques affichés vides en attendant leur développement côté backend.
-        </p>
-      )}
 
       <div className="kpi-grid">
         <KPICard icon="📄" iconBg="#e0e7ff" label="Total Disputes" value={total} subtext="All statuses" />
@@ -75,8 +68,8 @@ export default function OperatorDashboard() {
       </div>
 
       <div className="two-col-grid">
-        <BarChartCard title="Status Distribution" data={statusDist} colors={STATUS_COLORS} viewAllLink="/disputes" />
-        <BarChartCard title="Reason Distribution" data={reasonDist} colors={REASON_COLORS} viewAllLink="/disputes" />
+        <BarChartCard title="Status Distribution" data={topStatus} colors={STATUS_COLORS} viewAllLink="/analytics" />
+        <BarChartCard title="Reason Distribution" data={topReason} colors={REASON_COLORS} viewAllLink="/analytics" />
       </div>
 
       <div className="card">

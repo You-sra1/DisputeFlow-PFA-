@@ -4,8 +4,8 @@ import DashboardLayout from '../components/DashboardLayout';
 import StatusBadge from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { disputesAPI } from '../api';
+import { REASON_LABEL } from '../constants/statusConfig';
 
-// Actions disponibles pour l'opérateur selon le statut courant du litige
 const OPERATOR_ACTIONS = {
   SUBMITTED: [{ label: 'Start Review', action: 'review' }],
   UNDER_REVIEW: [
@@ -36,8 +36,9 @@ export default function DisputeDetails() {
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Champs spécifiques à certaines actions
-  const [action, setAction] = useState(null); // action en cours de saisie
+  const [respondComment, setRespondComment] = useState('');
+
+  const [action, setAction] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [cbReasonCode, setCbReasonCode] = useState('');
   const [network, setNetwork] = useState('Visa');
@@ -118,20 +119,30 @@ export default function DisputeDetails() {
     resetActionFields();
   }
 
+  async function handleRespond() {
+    if (!respondComment.trim()) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      await disputesAPI.respond(token, user.id, disputeId, respondComment.trim());
+      setRespondComment('');
+      await load();
+    } catch (err) {
+      setError(err.errorDescription || 'Failed to submit response.');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function renderActionForm() {
     if (!action) return null;
-
     const extraFields = [];
 
     if (action === 'reject') {
       extraFields.push(
         <div key="reject-reason">
           <label>Reason for rejection *</label>
-          <input
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="e.g. FRAUD, INCORRECT_AMOUNT..."
-          />
+          <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="e.g. FRAUD, INCORRECT_AMOUNT..." />
         </div>
       );
     }
@@ -140,11 +151,7 @@ export default function DisputeDetails() {
       extraFields.push(
         <div key="cb-code">
           <label>Chargeback Reason Code *</label>
-          <input
-            value={cbReasonCode}
-            onChange={(e) => setCbReasonCode(e.target.value)}
-            placeholder="e.g. 4837"
-          />
+          <input value={cbReasonCode} onChange={(e) => setCbReasonCode(e.target.value)} placeholder="e.g. 4837" />
         </div>,
         <div key="cb-network">
           <label>Network *</label>
@@ -159,12 +166,7 @@ export default function DisputeDetails() {
       extraFields.push(
         <div key="ref-amount">
           <label>Refund Amount *</label>
-          <input
-            type="number"
-            step="0.01"
-            value={refundAmount}
-            onChange={(e) => setRefundAmount(e.target.value)}
-          />
+          <input type="number" step="0.01" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} />
         </div>,
         <div key="ref-currency">
           <label>Currency *</label>
@@ -200,20 +202,13 @@ export default function DisputeDetails() {
         {extraFields}
         <div>
           <label>Comment</label>
-          <textarea
-            placeholder="Optional comment"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            rows={3}
-          />
+          <textarea placeholder="Optional comment" value={comment} onChange={(e) => setComment(e.target.value)} rows={3} />
         </div>
         <div className="action-buttons">
           <button className="btn-primary" disabled={actionLoading} onClick={() => runAction(action)}>
             {actionLoading ? 'Processing...' : 'Confirm'}
           </button>
-          <button className="btn-secondary" disabled={actionLoading} onClick={cancelAction}>
-            Cancel
-          </button>
+          <button className="btn-secondary" disabled={actionLoading} onClick={cancelAction}>Cancel</button>
         </div>
       </div>
     );
@@ -232,18 +227,27 @@ export default function DisputeDetails() {
   }
 
   const actions = user.role === 'OPERATOR' ? (OPERATOR_ACTIONS[dispute.status] || []) : [];
+  const canRespond = user.role === 'CLIENT' && dispute.status === 'WAITING_FOR_INFORMATION';
 
   return (
     <DashboardLayout breadcrumb={`Home > Disputes > ${disputeId}`}>
       <h1>Dispute {dispute.disputeId}</h1>
 
       <div className="card">
-        <p><strong>Transaction:</strong> {dispute.transactionId}</p>
-        <p><strong>Reason:</strong> {(dispute.reason || '').replace(/_/g, ' ')}</p>
-        <p><strong>Amount:</strong> {dispute.claimAmount} {dispute.currency}</p>
-        <p><strong>Status:</strong> <StatusBadge status={dispute.status} /></p>
-        {dispute.description && <p><strong>Description:</strong> {dispute.description}</p>}
-        {dispute.createdAt && <p><strong>Created:</strong> {new Date(dispute.createdAt).toLocaleString()}</p>}
+        <div className="dispute-info-grid">
+          <div>
+            <p><strong>Transaction:</strong> {dispute.transactionId}</p>
+            <p><strong>Reason:</strong> {REASON_LABEL[dispute.reason] || (dispute.reason || '').replace(/_/g, ' ')}</p>
+            <p><strong>Amount:</strong> {dispute.claimAmount} {dispute.currency}</p>
+            <p><strong>Status:</strong> <StatusBadge status={dispute.status} /></p>
+          </div>
+          <div>
+            {dispute.chargebackRef && <p><strong>Chargeback Ref:</strong> {dispute.chargebackRef}</p>}
+            {dispute.refundAmount && <p><strong>Refund Amount:</strong> {dispute.refundAmount} {dispute.refundCurrency || dispute.currency}</p>}
+            {dispute.description && <p><strong>Description:</strong> {dispute.description}</p>}
+            {dispute.createdAt && <p><strong>Created:</strong> {new Date(dispute.createdAt).toLocaleString()}</p>}
+          </div>
+        </div>
       </div>
 
       {error && <p className="error-text">{error}</p>}
@@ -254,17 +258,29 @@ export default function DisputeDetails() {
             <h3>Operator Actions</h3>
             <div className="action-buttons">
               {actions.map((a) => (
-                <button
-                  key={a.action}
-                  className="btn-primary"
-                  onClick={() => selectAction(a.action)}
-                >
-                  {a.label}
-                </button>
+                <button key={a.action} className="btn-primary" onClick={() => selectAction(a.action)}>{a.label}</button>
               ))}
             </div>
           </div>
         )
+      )}
+
+      {canRespond && (
+        <div className="card action-form">
+          <h4>Respond to Information Request</h4>
+          <p className="text-muted">Provide the requested information to continue the review process.</p>
+          <textarea
+            placeholder="Type your response..."
+            value={respondComment}
+            onChange={(e) => setRespondComment(e.target.value)}
+            rows={4}
+          />
+          <div className="action-buttons">
+            <button className="btn-primary" disabled={actionLoading || !respondComment.trim()} onClick={handleRespond}>
+              {actionLoading ? 'Submitting...' : 'Submit Response'}
+            </button>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 // Implémenté en CSS pur (pas de dépendance recharts/chart.js à installer).
 // Si vous préférez recharts pour des graphiques plus riches, dites-le-moi et
 // je le réécris avec <BarChart> — la structure de données (data) reste identique.
@@ -8,7 +10,7 @@ export default function BarChartCard({ title, data = [], colors = [], viewAllLin
     <div className="card bar-chart-card">
       <div className="card-header">
         <h3>{title}</h3>
-        {viewAllLink && <a href={viewAllLink} className="link-cell">View All</a>}
+        {viewAllLink && <Link to={viewAllLink} className="link-cell">View All</Link>}
       </div>
       {data.length === 0 ? (
         <p className="empty-state">No data available.</p>

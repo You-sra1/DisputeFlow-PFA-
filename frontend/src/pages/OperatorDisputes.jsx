@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import DisputesTable from '../components/DisputesTable';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { disputesAPI } from '../api';
 
 const STATUS_OPTIONS = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'WAITING_FOR_INFORMATION', 'APPROVED', 'REJECTED', 'CHARGEBACK_INITIATED', 'REFUND_COMPLETED', 'CLOSED'];
 
 export default function OperatorDisputes() {
   const { user, token } = useAuth();
+  const { rowsPerPage, compact } = usePreferences();
   const [disputes, setDisputes] = useState([]);
   const [status, setStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function OperatorDisputes() {
       {error && <p className="error-text">{error}</p>}
 
       <div className="card">
-        {loading ? <p>Loading...</p> : <DisputesTable disputes={disputes} variant="operator" />}
+        {loading ? <p>Loading...</p> : <DisputesTable disputes={disputes} variant="operator" rows={rowsPerPage} compact={compact} />}
       </div>
     </DashboardLayout>
   );

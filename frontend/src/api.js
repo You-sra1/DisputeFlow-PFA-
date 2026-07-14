@@ -75,19 +75,19 @@ export const transactionsAPI = {
   list: (token, userID, filters = {}) => apiCall('GET', '/transactions', filters, token, userID),
 };
 
+export const cardsAPI = {
+  list: (token, userID) => apiCall('GET', '/cards', {}, token, userID),
+};
+
 export const disputesAPI = {
   create: (token, userID, payload) => apiCall('POST', '/disputes', payload, token, userID),
   list: (token, userID, filters = {}) => apiCall('GET', '/disputes', filters, token, userID),
+  respond: (token, userID, disputeId, comment) => apiCall('PUT', `/disputes/${disputeId}/respond`, { comment }, token, userID),
   review: (token, userID, disputeId, comment) => apiCall('PUT', '/review', { disputeId, comment }, token, userID),
-  requestInfo: (token, userID, disputeId, comment) => apiCall('PUT', '/request-info', { disputeId, comment }, token, userID),
+  requestInfo: (token, userID, disputeId, message) => apiCall('PUT', '/request-info', { disputeId, message }, token, userID),
   approve: (token, userID, disputeId, comment) => apiCall('PUT', '/approve', { disputeId, comment }, token, userID),
   reject: (token, userID, disputeId, reason, comment) => apiCall('PUT', '/reject', { disputeId, reason, comment }, token, userID),
   chargeback: (token, userID, disputeId, chargebackReasonCode, network, comment) => apiCall('PUT', '/chargeback', { disputeId, chargebackReasonCode, network, comment }, token, userID),
   refund: (token, userID, disputeId, refundAmount, currency, refundMethod) => apiCall('PUT', '/refund', { disputeId, refundAmount, currency, refundMethod }, token, userID),
   close: (token, userID, disputeId, closureReason, comment) => apiCall('PUT', '/close', { disputeId, closureReason, comment }, token, userID),
-};
-
-export const dashboardAPI = {
-  statusDistribution: (token, userID) => apiCall('GET', '/dashboard/status-distribution', {}, token, userID),
-  reasonDistribution: (token, userID) => apiCall('GET', '/dashboard/reason-distribution', {}, token, userID),
 };
