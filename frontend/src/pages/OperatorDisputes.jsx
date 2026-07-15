@@ -1,51 +1,64 @@
-import { useEffect, useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
-import DisputesTable from '../components/DisputesTable';
-import { useAuth } from '../context/AuthContext';
-import { usePreferences } from '../context/PreferencesContext';
-import { disputesAPI } from '../api';
+// ============================================================================
+// OperatorDisputes.jsx — Liste complète de tous les litiges (tous clients),
+// filtrable par statut, point d'entrée vers le traitement de chaque dossier.
+// ============================================================================
 
-const STATUS_OPTIONS = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'WAITING_FOR_INFORMATION', 'APPROVED', 'REJECTED', 'CHARGEBACK_INITIATED', 'REFUND_COMPLETED', 'CLOSED'];
+import { useEffect, useState } from 'react';
+import Layout from '../components/Layout';
+import DisputesTable from '../components/DisputesTable';
+import { Loading, ErrorBanner } from '../components/Feedback';
+import { useAuth } from '../context/AuthContext';
+import * as api from '../api';
+import { DISPUTE_STATUSES, STATUS_LABELS } from '../constants';
 
 export default function OperatorDisputes() {
-  const { user, token } = useAuth();
-  const { rowsPerPage, compact } = usePreferences();
+  const { token, user } = useAuth();
   const [disputes, setDisputes] = useState([]);
   const [status, setStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => { load(); }, [status]);
-
-  async function load() {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await disputesAPI.list(token, user.id, { status });
-      setDisputes(data || []);
-    } catch (err) {
-      setError(err.errorDescription || 'Unable to load disputes.');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const data = await api.getDisputes(token, user.id, { status });
+        if (!cancelled) setDisputes(data);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }
+    load();
+    return () => { cancelled = true; };
+  }, [token, user.id, status]);
 
   return (
-    <DashboardLayout breadcrumb="Home / Disputes" showMenuIcon>
-      <h1>Disputes</h1>
+    <Layout role="OPERATOR" breadcrumb={[{ label: 'Home', to: '/operator/dashboard' }, { label: 'Disputes' }]}>
+      <div className="page-header">
+        <h1>All Disputes</h1>
+      </div>
 
       <div className="filter-row">
-        <label>Status:</label>
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-        </select>
+        <label>
+          Status:
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="ALL">ALL</option>
+            {DISPUTE_STATUSES.map((s) => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      {error && <p className="error-text">{error}</p>}
+      <ErrorBanner message={error} />
 
-      <div className="card">
-        {loading ? <p>Loading...</p> : <DisputesTable disputes={disputes} variant="operator" rows={rowsPerPage} compact={compact} />}
+      <div className="content-card">
+        {loading ? <Loading /> : <DisputesTable disputes={disputes} mode="operator" />}
       </div>
-    </DashboardLayout>
+    </Layout>
   );
 }

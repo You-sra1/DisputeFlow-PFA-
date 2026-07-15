@@ -1,55 +1,85 @@
+// ============================================================================
+// Login.jsx — Page de connexion. Appelle POST /login via le contexte
+// d'authentification, puis redirige vers le bon dashboard selon le rôle
+// renvoyé par le backend (CLIENT -> /dashboard, OPERATOR -> /operator/dashboard).
+// ============================================================================
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ErrorBanner } from '../components/Feedback';
 
 export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    setSubmitting(true);
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const user = await login(email, password);
+      navigate(user.role === 'OPERATOR' ? '/operator/dashboard' : '/dashboard', { replace: true });
     } catch (err) {
-      console.error('[Login] err:', err);
-      setError(err.errorDescription || err.message || 'Login failed. Check your credentials.');
+      setError(err.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="login-page">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <div className="login-brand">
-          <div className="sidebar-logo">🛡️</div>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="sidebar-logo auth-logo">🛡️</div>
           <div>
-            <div className="login-title">SecureBank</div>
-            <div className="login-subtitle">Dispute Portal</div>
+            <div className="auth-title">SecureBank</div>
+            <div className="auth-subtitle">Dispute Portal</div>
           </div>
         </div>
 
-        <h2>Sign in</h2>
+        <h1 className="auth-heading">Sign in to your account</h1>
 
-        <label>Email</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <ErrorBanner message={error} />
 
-        <label>Password</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <form onSubmit={handleSubmit} className="auth-form">
+          <label className="form-field">
+            <span>Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client001@example.com"
+              required
+            />
+          </label>
 
-        {error && <p className="error-text">{error}</p>}
+          <label className="form-field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </label>
 
-        <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Signing in...' : 'Sign in'}
-        </button>
-      </form>
+          <button type="submit" className="btn-primary btn-block" disabled={submitting}>
+            {submitting ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <p className="auth-hint">
+          Demo accounts — Client: client001@example.com · Operator: operator@example.com
+          (password: Password123)
+        </p>
+      </div>
     </div>
   );
 }

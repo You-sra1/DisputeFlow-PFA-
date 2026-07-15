@@ -11,6 +11,7 @@ const { successResponse } = require('./utils/responseBuilder');
 const authRoutes = require('./routes/authRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const disputeRoutes = require('./routes/disputeRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/login', loginLimiter);
 app.use('/api', authRoutes);
 app.use('/api', transactionRoutes);
 app.use('/api', disputeRoutes);
+app.use('/api', dashboardRoutes);
 
 app.use(errorHandler);
 

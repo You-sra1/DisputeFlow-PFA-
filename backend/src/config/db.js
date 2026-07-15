@@ -28,93 +28,93 @@ async function initializeTables() {
     await runQuery(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
+        nom TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('CLIENT', 'OPERATOR')),
-        createdAt TEXT DEFAULT (datetime('now'))
+        created_at TEXT DEFAULT (datetime('now'))
       )
     `);
 
     await runQuery(`
       CREATE TABLE IF NOT EXISTS cards (
         id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL,
-        cardNumber TEXT NOT NULL,
-        cardType TEXT NOT NULL,
-        expiryDate TEXT NOT NULL,
-        cardholderName TEXT NOT NULL,
-        isActive INTEGER NOT NULL DEFAULT 1,
-        createdAt TEXT DEFAULT (datetime('now'))
+        client_id TEXT NOT NULL,
+        card_number TEXT NOT NULL,
+        card_type TEXT NOT NULL,
+        expiry_date TEXT NOT NULL,
+        cardholder_name TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
       )
     `);
 
     await runQuery(`
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL,
-        cardId TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        card_id TEXT NOT NULL,
         amount REAL NOT NULL,
         currency TEXT NOT NULL DEFAULT 'USD',
         merchant TEXT NOT NULL,
-        merchantCategory TEXT,
+        merchant_category TEXT,
         status TEXT NOT NULL DEFAULT 'PENDING',
-        transactionDate TEXT NOT NULL,
+        transaction_date TEXT NOT NULL,
         description TEXT,
-        createdAt TEXT DEFAULT (datetime('now'))
+        created_at TEXT DEFAULT (datetime('now'))
       )
     `);
 
     await runQuery(`
       CREATE TABLE IF NOT EXISTS disputes (
         id TEXT PRIMARY KEY,
-        transactionId TEXT NOT NULL,
-        userId TEXT NOT NULL,
+        transaction_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
         reason TEXT NOT NULL,
         description TEXT NOT NULL,
         amount REAL NOT NULL,
         currency TEXT NOT NULL DEFAULT 'USD',
-        status TEXT NOT NULL DEFAULT 'SUBMITTED',
+        status TEXT NOT NULL DEFAULT 'SOUMIS',
         priority TEXT NOT NULL DEFAULT 'NORMAL',
-        assignedTo TEXT,
-        createdAt TEXT DEFAULT (datetime('now')),
-        updatedAt TEXT DEFAULT (datetime('now'))
+        assigned_to TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
       )
     `);
 
     await runQuery(`
       CREATE TABLE IF NOT EXISTS dispute_status_history (
         id TEXT PRIMARY KEY,
-        disputeId TEXT NOT NULL,
-        fromStatus TEXT,
-        toStatus TEXT NOT NULL,
-        changedBy TEXT NOT NULL,
+        dispute_id TEXT NOT NULL,
+        old_status TEXT,
+        new_status TEXT NOT NULL,
+        changed_by TEXT NOT NULL,
         reason TEXT,
-        createdAt TEXT DEFAULT (datetime('now'))
+        created_at TEXT DEFAULT (datetime('now'))
       )
     `);
 
     await runQuery(`
       CREATE TABLE IF NOT EXISTS dispute_comments (
         id TEXT PRIMARY KEY,
-        disputeId TEXT NOT NULL,
-        userId TEXT NOT NULL,
+        dispute_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
         comment TEXT NOT NULL,
-        createdAt TEXT DEFAULT (datetime('now'))
+        created_at TEXT DEFAULT (datetime('now'))
       )
     `);
 
     await runQuery(`
       CREATE TABLE IF NOT EXISTS dispute_documents (
         id TEXT PRIMARY KEY,
-        disputeId TEXT NOT NULL,
-        userId TEXT NOT NULL,
-        fileName TEXT NOT NULL,
-        fileType TEXT NOT NULL,
-        filePath TEXT NOT NULL,
-        fileSize INTEGER,
-        fileContent TEXT,
-        uploadedAt TEXT DEFAULT (datetime('now'))
+        dispute_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_size INTEGER,
+        file_content TEXT,
+        uploaded_at TEXT DEFAULT (datetime('now'))
       )
     `);
 

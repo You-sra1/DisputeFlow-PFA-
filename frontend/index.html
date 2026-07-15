@@ -1,25 +1,12 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SecureBank - Dispute Portal</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SecureBank — Dispute Portal</title>
   </head>
   <body>
-    <script>
-      const origWarn = console.warn;
-      const origLog = console.log;
-      const devtools = /React DevTools/i;
-      console.warn = function(...args) {
-        if (devtools.test(args.join(' '))) return;
-        return origWarn.apply(console, args);
-      };
-      console.log = function(...args) {
-        if (devtools.test(args.join(' '))) return;
-        return origLog.apply(console, args);
-      };
-    </script>
     <div id="root"></div>
-    <script type="module" src="/src/index.jsx"></script>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

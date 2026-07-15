@@ -1,24 +1,14 @@
+// ============================================================================
+// Sidebar.jsx — Barre de navigation latérale, commune aux interfaces
+// CLIENT et OPERATOR. La liste de liens affichée dépend du rôle de
+// l'utilisateur connecté (passée en prop par le layout parent).
+// ============================================================================
+
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const CLIENT_LINKS = [
-  { to: '/dashboard', label: 'Home', icon: '🏠' },
-  { to: '/transactions', label: 'Transactions', icon: '💳' },
-  { to: '/disputes', label: 'My Disputes', icon: '📁' },
-  { to: '/profile', label: 'Profile', icon: '👤' },
-];
-
-const OPERATOR_LINKS = [
-  { to: '/dashboard', label: 'Home', icon: '🏠' },
-  { to: '/disputes', label: 'Disputes', icon: '📄' },
-  { to: '/analytics', label: 'Analytics', icon: '📊' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
-];
-
-export default function Sidebar() {
-  const { user, logout } = useAuth();
-  const isOperator = user?.role === 'OPERATOR';
-  const links = isOperator ? OPERATOR_LINKS : CLIENT_LINKS;
+export default function Sidebar({ links }) {
+  const { logout } = useAuth();
 
   return (
     <aside className="sidebar">
@@ -26,7 +16,7 @@ export default function Sidebar() {
         <div className="sidebar-logo">🛡️</div>
         <div>
           <div className="sidebar-title">SecureBank</div>
-          {!isOperator && <div className="sidebar-subtitle">Dispute Portal</div>}
+          <div className="sidebar-subtitle">Dispute Portal</div>
         </div>
       </div>
 
@@ -37,15 +27,16 @@ export default function Sidebar() {
             to={link.to}
             className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
           >
-            <span className="sidebar-icon">{link.icon}</span>
-            {link.label}
+            <span className="sidebar-icon" aria-hidden="true">{link.icon}</span>
+            <span>{link.label}</span>
           </NavLink>
         ))}
       </nav>
 
       <div className="sidebar-footer">
-        <button className="sidebar-logout" onClick={logout}>
-          <span className="sidebar-icon">🚪</span> Logout
+        <button type="button" className="sidebar-link sidebar-logout" onClick={logout}>
+          <span className="sidebar-icon" aria-hidden="true">🚪</span>
+          <span>Logout</span>
         </button>
       </div>
     </aside>

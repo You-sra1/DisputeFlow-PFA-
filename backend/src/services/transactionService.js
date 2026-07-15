@@ -10,7 +10,7 @@ const AppError = require('../utils/AppError');
 // En cas d'erreur SQL, rejette avec AppError(50000) pour éviter d'exposer le détail technique.
 function findCardByNumber(cardNumber) {
   return new Promise((resolve, reject) => {
-    db.get('SELECT id, userId FROM cards WHERE cardNumber = ?', [cardNumber], (err, row) => {
+    db.get('SELECT id, client_id FROM cards WHERE card_number = ?', [cardNumber], (err, row) => {
       if (err) return reject(new AppError('Internal server error', 500, '50000'));
       resolve(row);
     });
@@ -23,8 +23,8 @@ function findCardByNumber(cardNumber) {
 function findTransactionById(transactionId) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT id, userId, cardId, amount, currency, merchant, merchantCategory,
-              status, transactionDate, description, createdAt
+      `SELECT id, client_id, card_id, amount, currency, merchant, merchant_category,
+              status, transaction_date, description, created_at
        FROM transactions WHERE id = ?`,
       [transactionId],
       (err, row) => {
@@ -40,21 +40,21 @@ function findTransactionById(transactionId) {
 // En cas d'erreur SQL, rejette avec AppError(50000).
 function getTransactions(cardId, userId, startDate, endDate) {
   return new Promise((resolve, reject) => {
-    let sql = `SELECT id, merchant, amount, currency, transactionDate, status
+    let sql = `SELECT id, merchant, amount, currency, transaction_date, status
                FROM transactions
-               WHERE cardId = ? AND userId = ?`;
+               WHERE card_id = ? AND client_id = ?`;
     const params = [cardId, userId];
 
     if (startDate) {
-      sql += ' AND transactionDate >= ?';
+      sql += ' AND transaction_date >= ?';
       params.push(startDate);
     }
     if (endDate) {
-      sql += ' AND transactionDate <= ?';
+      sql += ' AND transaction_date <= ?';
       params.push(endDate);
     }
 
-    sql += ' ORDER BY transactionDate DESC';
+    sql += ' ORDER BY transaction_date DESC';
 
     db.all(sql, params, (err, rows) => {
       if (err) return reject(new AppError('Internal server error', 500, '50000'));
@@ -67,7 +67,7 @@ function getTransactions(cardId, userId, startDate, endDate) {
 // Retourne la ligne complète ou undefined si aucune carte trouvée.
 function findCardByUserId(userId) {
   return new Promise((resolve, reject) => {
-    db.get('SELECT id, userId FROM cards WHERE userId = ? AND isActive = 1 LIMIT 1', [userId], (err, row) => {
+    db.get('SELECT id, client_id FROM cards WHERE client_id = ? AND is_active = 1 LIMIT 1', [userId], (err, row) => {
       if (err) return reject(new AppError('Internal server error', 500, '50000'));
       resolve(row);
     });
@@ -79,7 +79,7 @@ function findCardByUserId(userId) {
 function findCardsByUserId(userId) {
   return new Promise((resolve, reject) => {
     db.all(
-      'SELECT id, cardNumber, cardType FROM cards WHERE userId = ? AND isActive = 1 ORDER BY id',
+      'SELECT id, card_number, card_type FROM cards WHERE client_id = ? AND is_active = 1 ORDER BY id',
       [userId],
       (err, rows) => {
         if (err) return reject(new AppError('Internal server error', 500, '50000'));

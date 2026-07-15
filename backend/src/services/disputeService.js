@@ -31,15 +31,14 @@ function generateDisputeId() {
 // Chaque clé = statut actuel, chaque valeur = tableau des statuts atteignables.
 // Respecte strictement l'ordre logique du CDC.
 const VALID_TRANSITIONS = {
-  SUBMITTED:                   ['UNDER_REVIEW'],
-  UNDER_REVIEW:                ['WAITING_FOR_INFORMATION', 'APPROVED', 'REJECTED'],
-  WAITING_FOR_INFORMATION:     ['UNDER_REVIEW', 'APPROVED', 'REJECTED'],
-  APPROVED:                    ['CHARGEBACK_INITIATED'],
-  CHARGEBACK_INITIATED:        ['MERCHANT_RESPONSE_RECEIVED', 'REFUND_COMPLETED'],
-  MERCHANT_RESPONSE_RECEIVED:  ['REFUND_COMPLETED'],
-  REFUND_COMPLETED:            ['CLOSED'],
-  REJECTED:                    ['CLOSED'],
-  CLOSED:                      [],
+  SOUMIS:                        ['EN_COURS_D_ANALYSE'],
+  EN_COURS_D_ANALYSE:            ['EN_ATTENTE_D_INFORMATIONS', 'APPROUVE', 'REJETE'],
+  EN_ATTENTE_D_INFORMATIONS:     ['EN_COURS_D_ANALYSE', 'APPROUVE', 'REJETE'],
+  APPROUVE:                      ['CHARGEBACK_INITIE'],
+  CHARGEBACK_INITIE:             ['REMBOURSEMENT_EFFECTUE'],
+  REMBOURSEMENT_EFFECTUE:        ['CLOTURE'],
+  REJETE:                        ['CLOTURE'],
+  CLOTURE:                       [],
 };
 
 // Valide qu'une transition de statut est autorisée par le workflow.
@@ -77,7 +76,7 @@ function getAllowedTransitions(currentStatus) {
 function findTransactionById(transactionId) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT id, userId, amount, currency, status FROM transactions WHERE id = ?`,
+      `SELECT id, client_id, amount, currency, status FROM transactions WHERE id = ?`,
       [transactionId],
       (err, row) => {
         if (err) return reject(new AppError('Internal server error', 500, '50000'));
@@ -94,7 +93,7 @@ function findActiveDisputeByTransactionId(transactionId) {
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT id, status FROM disputes
-       WHERE transactionId = ? AND status NOT IN ('REJECTED', 'CLOSED')`,
+       WHERE transaction_id = ? AND status NOT IN ('REJETE', 'CLOTURE')`,
       [transactionId],
       (err, row) => {
         if (err) return reject(new AppError('Internal server error', 500, '50000'));
@@ -111,7 +110,7 @@ function findActiveDisputeByTransactionId(transactionId) {
 function findDisputeById(disputeId) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT id, transactionId, userId, status, amount, currency FROM disputes WHERE id = ?`,
+      `SELECT id, transaction_id, client_id, status, amount, currency FROM disputes WHERE id = ?`,
       [disputeId],
       (err, row) => {
         if (err) return reject(new AppError('Internal server error', 500, '50000'));
@@ -151,16 +150,16 @@ async function createDispute({ transactionId, reason, description, claimAmount, 
 
       // ── Étape 1 : insertion du litige ──
       run(
-        `INSERT INTO disputes (id, transactionId, userId, reason, description, amount, currency, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'SUBMITTED')`,
+        `INSERT INTO disputes (id, transaction_id, client_id, reason, description, amount, currency, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'SOUMIS')`,
         [disputeId, transactionId, userId, reason, description, claimAmount, currency]
       )
       .then(() => {
         // ── Étape 2 : insertion dans l'historique des statuts ──
         // previousStatus = NULL car c'est la création, newStatus = SUBMITTED
         return run(
-          `INSERT INTO dispute_status_history (id, disputeId, fromStatus, toStatus, changedBy, reason)
-           VALUES (?, ?, NULL, 'SUBMITTED', ?, 'Dispute created')`,
+          `INSERT INTO dispute_status_history (id, dispute_id, old_status, new_status, changed_by, reason)
+           VALUES (?, ?, NULL, 'SOUMIS', ?, 'Dispute created')`,
           [randomUUID(), disputeId, userId]
         );
       })
@@ -168,7 +167,7 @@ async function createDispute({ transactionId, reason, description, claimAmount, 
         // ── Étape 3 : insertion du commentaire initial ──
         // La description fournie par le client est stockée comme premier commentaire
         return run(
-          `INSERT INTO dispute_comments (id, disputeId, userId, comment)
+          `INSERT INTO dispute_comments (id, dispute_id, client_id, comment)
            VALUES (?, ?, ?, ?)`,
           [randomUUID(), disputeId, userId, description]
         );
@@ -181,10 +180,10 @@ async function createDispute({ transactionId, reason, description, claimAmount, 
             return reject(new AppError('Internal server error', 500, '50000'));
           }
           resolve({
-            disputeId,
-            transactionId,
-            status: 'SUBMITTED',
-            createdAt: now,
+            dispute_id: disputeId,
+            transaction_id: transactionId,
+            status: 'SOUMIS',
+            created_at: now,
           });
         });
       })
@@ -199,11 +198,11 @@ async function createDispute({ transactionId, reason, description, claimAmount, 
 
 // ─── PRISE EN CHARGE D'UN LITIGE (REVIEW) ──────────────────────────────────
 
-// Transitionne un litige du statut SUBMITTED vers UNDER_REVIEW.
+// Transitionne un litige du statut SOUMIS vers EN_COURS_D_ANALYSE.
 // Opération réservée à l'OPERATOR.
 // Valide la transition autorisée, puis exécute en une seule transaction SQL :
-//   1. UPDATE du statut du litige → UNDER_REVIEW
-//   2. INSERT dans dispute_status_history (SUBMITTED → UNDER_REVIEW)
+//   1. UPDATE du statut du litige → EN_COURS_D_ANALYSE
+//   2. INSERT dans dispute_status_history (SOUMIS → EN_COURS_D_ANALYSE)
 //   3. INSERT dans dispute_comments (commentaire de l'opérateur)
 //
 // Paramètres :
@@ -220,8 +219,8 @@ async function reviewDispute(disputeId, operatorId, comment) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Valider la transition SUBMITTED → UNDER_REVIEW ──
-  validateTransition(dispute.status, 'UNDER_REVIEW');
+  // ── 2. Valider la transition SOUMIS → EN_COURS_D_ANALYSE ──
+  validateTransition(dispute.status, 'EN_COURS_D_ANALYSE');
 
   // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
@@ -241,12 +240,12 @@ async function reviewDispute(disputeId, operatorId, comment) {
 
       // Étape 1 : UPDATE du statut
       run(
-        `UPDATE disputes SET status = 'UNDER_REVIEW', updatedAt = ? WHERE id = ?`,
+        `UPDATE disputes SET status = 'EN_COURS_D_ANALYSE', updated_at = ? WHERE id = ?`,
         [now, disputeId]
       )
       .then(() => {
         // Étape 2 : historique de la transition
-        return recordStatusChange(disputeId, 'SUBMITTED', 'UNDER_REVIEW', operatorId, comment);
+        return recordStatusChange(disputeId, 'SOUMIS', 'EN_COURS_D_ANALYSE', operatorId, comment);
       })
       .then(() => {
         // Étape 3 : commentaire de l'opérateur
@@ -260,10 +259,10 @@ async function reviewDispute(disputeId, operatorId, comment) {
             return reject(new AppError('Internal server error', 500, '50000'));
           }
           resolve({
-            disputeId,
-            status: 'UNDER_REVIEW',
-            reviewedBy: operatorId,
-            reviewDate: now,
+            dispute_id: disputeId,
+            status: 'EN_COURS_D_ANALYSE',
+            reviewed_by: operatorId,
+            review_date: now,
           });
         });
       })
@@ -277,11 +276,11 @@ async function reviewDispute(disputeId, operatorId, comment) {
 
 // ─── DEMANDE D'INFORMATIONS COMPLÉMENTAIRES (REQUEST-INFO) ─────────────────
 
-// Transitionne un litige du statut UNDER_REVIEW vers WAITING_FOR_INFORMATION.
+// Transitionne un litige du statut EN_COURS_D_ANALYSE vers EN_ATTENTE_D_INFORMATIONS.
 // Opération réservée à l'OPERATOR.
 // Valide la transition autorisée, puis exécute en une seule transaction SQL :
-//   1. UPDATE du statut du litige → WAITING_FOR_INFORMATION
-//   2. INSERT dans dispute_status_history (UNDER_REVIEW → WAITING_FOR_INFORMATION)
+//   1. UPDATE du statut du litige → EN_ATTENTE_D_INFORMATIONS
+//   2. INSERT dans dispute_status_history (EN_COURS_D_ANALYSE → EN_ATTENTE_D_INFORMATIONS)
 //   3. INSERT dans dispute_comments (message de l'opérateur)
 //
 // Paramètres :
@@ -298,8 +297,8 @@ async function requestInfo(disputeId, operatorId, message) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Valider la transition UNDER_REVIEW → WAITING_FOR_INFORMATION ──
-  validateTransition(dispute.status, 'WAITING_FOR_INFORMATION');
+  // ── 2. Valider la transition EN_COURS_D_ANALYSE → EN_ATTENTE_D_INFORMATIONS ──
+  validateTransition(dispute.status, 'EN_ATTENTE_D_INFORMATIONS');
 
   // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
@@ -319,12 +318,12 @@ async function requestInfo(disputeId, operatorId, message) {
 
       // Étape 1 : UPDATE du statut
       run(
-        `UPDATE disputes SET status = 'WAITING_FOR_INFORMATION', updatedAt = ? WHERE id = ?`,
+        `UPDATE disputes SET status = 'EN_ATTENTE_D_INFORMATIONS', updated_at = ? WHERE id = ?`,
         [now, disputeId]
       )
       .then(() => {
         // Étape 2 : historique de la transition
-        return recordStatusChange(disputeId, 'UNDER_REVIEW', 'WAITING_FOR_INFORMATION', operatorId, message);
+        return recordStatusChange(disputeId, 'EN_COURS_D_ANALYSE', 'EN_ATTENTE_D_INFORMATIONS', operatorId, message);
       })
       .then(() => {
         // Étape 3 : commentaire de l'opérateur
@@ -338,9 +337,9 @@ async function requestInfo(disputeId, operatorId, message) {
             return reject(new AppError('Internal server error', 500, '50000'));
           }
           resolve({
-            disputeId,
-            status: 'WAITING_FOR_INFORMATION',
-            requestedInformation: message,
+            dispute_id: disputeId,
+            status: 'EN_ATTENTE_D_INFORMATIONS',
+            requested_information: message,
           });
         });
       })
@@ -354,11 +353,11 @@ async function requestInfo(disputeId, operatorId, message) {
 
 // ─── APPROBATION D'UN LITIGE (APPROVE) ─────────────────────────────────────
 
-// Transitionne un litige du statut UNDER_REVIEW ou WAITING_FOR_INFORMATION
-// vers APPROVED. Opération réservée à l'OPERATOR.
+// Transitionne un litige du statut EN_COURS_D_ANALYSE ou EN_ATTENTE_D_INFORMATIONS
+// vers APPROUVE. Opération réservée à l'OPERATOR.
 // Valide la transition autorisée, puis exécute en une seule transaction SQL :
-//   1. UPDATE du statut du litige → APPROVED
-//   2. INSERT dans dispute_status_history (ancien statut → APPROVED)
+//   1. UPDATE du statut du litige → APPROUVE
+//   2. INSERT dans dispute_status_history (ancien statut → APPROUVE)
 //   3. INSERT dans dispute_comments (commentaire de l'opérateur)
 //
 // Paramètres :
@@ -375,8 +374,8 @@ async function approveDispute(disputeId, operatorId, comment) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Valider la transition vers APPROVED ──
-  validateTransition(dispute.status, 'APPROVED');
+  // ── 2. Valider la transition vers APPROUVE ──
+  validateTransition(dispute.status, 'APPROUVE');
 
   // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
@@ -396,12 +395,12 @@ async function approveDispute(disputeId, operatorId, comment) {
 
       // Étape 1 : UPDATE du statut
       run(
-        `UPDATE disputes SET status = 'APPROVED', updatedAt = ? WHERE id = ?`,
+        `UPDATE disputes SET status = 'APPROUVE', updated_at = ? WHERE id = ?`,
         [now, disputeId]
       )
       .then(() => {
         // Étape 2 : historique de la transition
-        return recordStatusChange(disputeId, dispute.status, 'APPROVED', operatorId, comment);
+        return recordStatusChange(disputeId, dispute.status, 'APPROUVE', operatorId, comment);
       })
       .then(() => {
         // Étape 3 : commentaire de l'opérateur
@@ -415,9 +414,9 @@ async function approveDispute(disputeId, operatorId, comment) {
             return reject(new AppError('Internal server error', 500, '50000'));
           }
           resolve({
-            disputeId,
-            status: 'APPROVED',
-            approvedBy: operatorId,
+            dispute_id: disputeId,
+            status: 'APPROUVE',
+            approved_by: operatorId,
           });
         });
       })
@@ -431,11 +430,11 @@ async function approveDispute(disputeId, operatorId, comment) {
 
 // ─── REJET D'UN LITIGE (REJECT) ────────────────────────────────────────────
 
-// Transitionne un litige du statut UNDER_REVIEW ou WAITING_FOR_INFORMATION
-// vers REJECTED. Opération réservée à l'OPERATOR.
+// Transitionne un litige du statut EN_COURS_D_ANALYSE ou EN_ATTENTE_D_INFORMATIONS
+// vers REJETE. Opération réservée à l'OPERATOR.
 // Valide la transition autorisée, puis exécute en une seule transaction SQL :
-//   1. UPDATE du statut du litige → REJECTED
-//   2. INSERT dans dispute_status_history (ancien statut → REJECTED,
+//   1. UPDATE du statut du litige → REJETE
+//   2. INSERT dans dispute_status_history (ancien statut → REJETE,
 //      avec le champ reason = "Reason: <reason> | Comment: <comment>")
 //   3. INSERT dans dispute_comments (commentaire de l'opérateur)
 //
@@ -454,8 +453,8 @@ async function rejectDispute(disputeId, operatorId, reason, comment) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Valider la transition vers REJECTED ──
-  validateTransition(dispute.status, 'REJECTED');
+  // ── 2. Valider la transition vers REJETE ──
+  validateTransition(dispute.status, 'REJETE');
 
   // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
@@ -480,12 +479,12 @@ async function rejectDispute(disputeId, operatorId, reason, comment) {
 
       // Étape 1 : UPDATE du statut
       run(
-        `UPDATE disputes SET status = 'REJECTED', updatedAt = ? WHERE id = ?`,
+        `UPDATE disputes SET status = 'REJETE', updated_at = ? WHERE id = ?`,
         [now, disputeId]
       )
       .then(() => {
         // Étape 2 : historique de la transition
-        return recordStatusChange(disputeId, dispute.status, 'REJECTED', operatorId, historyComment);
+        return recordStatusChange(disputeId, dispute.status, 'REJETE', operatorId, historyComment);
       })
       .then(() => {
         // Étape 3 : commentaire de l'opérateur
@@ -500,8 +499,8 @@ async function rejectDispute(disputeId, operatorId, reason, comment) {
             return reject(new AppError('Internal server error', 500, '50000'));
           }
           resolve({
-            disputeId,
-            status: 'REJECTED',
+            dispute_id: disputeId,
+            status: 'REJETE',
             reason,
           });
         });
@@ -524,7 +523,7 @@ function generateChargebackReference() {
   return new Promise((resolve, reject) => {
     const year = new Date().getFullYear();
     db.get(
-      `SELECT COUNT(*) AS count FROM dispute_status_history WHERE toStatus = 'CHARGEBACK_INITIATED'`,
+      `SELECT COUNT(*) AS count FROM dispute_status_history WHERE new_status = 'CHARGEBACK_INITIE'`,
       [],
       (err, row) => {
         if (err) return reject(new AppError('Internal server error', 500, '50000'));
@@ -538,9 +537,9 @@ function generateChargebackReference() {
 // ─── INITIATION D'UN CHARGEBACK ──────────────────────────────────────────────
 
 // Déclenche la procédure de chargeback sur un litige approuvé.
-// Transition : APPROVED → CHARGEBACK_INITIATED.
+// Transition : APPROUVE → CHARGEBACK_INITIE.
 // Génère une référence unique et enregistre l'historique + commentaire.
-// Validation : disputeId doit exister et être au statut APPROVED.
+// Validation : disputeId doit exister et être au statut APPROUVE.
 //   chargebackReasonCode : code motif chargeback (ex: "4837")
 //   network              : "Visa" ou "Mastercard"
 //   comment              : texte libre de l'opérateur
@@ -551,7 +550,7 @@ async function chargebackDispute(disputeId, operatorId, chargebackReasonCode, ne
   }
 
   const currentStatus = dispute.status;
-  const newStatus = 'CHARGEBACK_INITIATED';
+  const newStatus = 'CHARGEBACK_INITIE';
 
   validateTransition(currentStatus, newStatus);
 
@@ -577,7 +576,7 @@ async function chargebackDispute(disputeId, operatorId, chargebackReasonCode, ne
         });
       });
 
-      run(`UPDATE disputes SET status = ?, updatedAt = ? WHERE id = ?`, [newStatus, now, disputeId])
+      run(`UPDATE disputes SET status = ?, updated_at = ? WHERE id = ?`, [newStatus, now, disputeId])
         .then(() => recordStatusChange(disputeId, currentStatus, newStatus, operatorId, historyComment))
         .then(() => recordComment(disputeId, operatorId, comment))
         .then(() => {
@@ -586,7 +585,7 @@ async function chargebackDispute(disputeId, operatorId, chargebackReasonCode, ne
               db.run('ROLLBACK', () => {});
               return reject(new AppError('Internal server error', 500, '50000'));
             }
-            resolve({ disputeId, status: newStatus, chargebackReference });
+            resolve({ dispute_id: disputeId, status: newStatus, chargeback_reference: chargebackReference });
           });
         })
         .catch((sqlErr) => {
@@ -600,8 +599,8 @@ async function chargebackDispute(disputeId, operatorId, chargebackReasonCode, ne
 // ─── REMBOURSEMENT APRÈS CHARGEBACK ──────────────────────────────────────────
 
 // Finalise un chargeback par un remboursement effectif au client.
-// Transition : CHARGEBACK_INITIATED → REFUND_COMPLETED.
-// Validation : disputeId doit exister et être au statut CHARGEBACK_INITIATED.
+// Transition : CHARGEBACK_INITIE → REMBOURSEMENT_EFFECTUE.
+// Validation : disputeId doit exister et être au statut CHARGEBACK_INITIE.
 //   refundAmount : montant remboursé, doit être > 0 et ≤ amount du litige
 //   currency     : doit correspondre à la devise du litige original
 //   refundMethod : "CARD_CREDIT" ou "BANK_TRANSFER"
@@ -612,7 +611,7 @@ async function refundDispute(disputeId, operatorId, refundAmount, currency, refu
   }
 
   const currentStatus = dispute.status;
-  const newStatus = 'REFUND_COMPLETED';
+  const newStatus = 'REMBOURSEMENT_EFFECTUE';
 
   validateTransition(currentStatus, newStatus);
 
@@ -646,14 +645,14 @@ async function refundDispute(disputeId, operatorId, refundAmount, currency, refu
         });
       });
 
-      run(`UPDATE disputes SET status = ?, updatedAt = ? WHERE id = ?`, [newStatus, now, disputeId])
+      run(`UPDATE disputes SET status = ?, updated_at = ? WHERE id = ?`, [newStatus, now, disputeId])
         .then(() => recordStatusChange(disputeId, currentStatus, newStatus, operatorId, historyComment))
         .then(() => db.run('COMMIT', (commitErr) => {
           if (commitErr) {
             db.run('ROLLBACK', () => {});
             return reject(new AppError('Internal server error', 500, '50000'));
           }
-          resolve({ disputeId, status: newStatus, refundAmount, currency });
+          resolve({ dispute_id: disputeId, status: newStatus, refund_amount: refundAmount, currency });
         }))
         .catch((sqlErr) => {
           db.run('ROLLBACK', () => {});
@@ -666,8 +665,8 @@ async function refundDispute(disputeId, operatorId, refundAmount, currency, refu
 // ─── CLÔTURE D'UN DOSSIER DE LITIGE ──────────────────────────────────────────
 
 // Clôture définitivement un dossier de litige.
-// Transition : REJECTED → CLOSED ou REFUND_COMPLETED → CLOSED.
-// La clôture est irréversible : un litige CLOSED ne peut plus changer de statut.
+// Transition : REJETE → CLOTURE ou REMBOURSEMENT_EFFECTUE → CLOTURE.
+// La clôture est irréversible : un litige CLOTURE ne peut plus changer de statut.
 // closureReason doit être une valeur parmi : CASE_RESOLVED, REJECTED_FINAL,
 // REFUND_ISSUED, OTHER.
 // La closedDate est générée en ISO 8601 côté serveur.
@@ -678,7 +677,7 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
   }
 
   const currentStatus = dispute.status;
-  const newStatus = 'CLOSED';
+  const newStatus = 'CLOTURE';
 
   validateTransition(currentStatus, newStatus);
 
@@ -696,7 +695,7 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
         });
       });
 
-      run(`UPDATE disputes SET status = ?, updatedAt = ? WHERE id = ?`, [newStatus, closedDate, disputeId])
+      run(`UPDATE disputes SET status = ?, updated_at = ? WHERE id = ?`, [newStatus, closedDate, disputeId])
         .then(() => recordStatusChange(disputeId, currentStatus, newStatus, operatorId, historyComment))
         .then(() => recordComment(disputeId, operatorId, comment))
         .then(() => {
@@ -705,7 +704,7 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
               db.run('ROLLBACK', () => {});
               return reject(new AppError('Internal server error', 500, '50000'));
             }
-            resolve({ disputeId, status: newStatus, closedDate });
+            resolve({ dispute_id: disputeId, status: newStatus, closed_date: closedDate });
           });
         })
         .catch((sqlErr) => {
@@ -717,16 +716,16 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
 }
 
 // ─── RÉPONSE DU CLIENT À UNE DEMANDE D'INFO ───────────────────────────────
-// WAITING_FOR_INFORMATION → UNDER_REVIEW
+// EN_ATTENTE_D_INFORMATIONS → EN_COURS_D_ANALYSE
 async function respondToInfoRequest(disputeId, userId, comment) {
   const dispute = await findDisputeById(disputeId);
   if (!dispute) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  if (dispute.status !== 'WAITING_FOR_INFORMATION') {
+  if (dispute.status !== 'EN_ATTENTE_D_INFORMATIONS') {
     throw new AppError(
-      `Invalid status transition: dispute must be WAITING_FOR_INFORMATION, current status is ${dispute.status}`,
+      `Invalid status transition: dispute must be EN_ATTENTE_D_INFORMATIONS, current status is ${dispute.status}`,
       409,
       '40908'
     );
@@ -747,8 +746,8 @@ async function respondToInfoRequest(disputeId, userId, comment) {
         });
       });
 
-      run(`UPDATE disputes SET status = 'UNDER_REVIEW', updatedAt = ? WHERE id = ?`, [now, disputeId])
-        .then(() => recordStatusChange(disputeId, 'WAITING_FOR_INFORMATION', 'UNDER_REVIEW', userId, 'Client responded to information request'))
+      run(`UPDATE disputes SET status = 'EN_COURS_D_ANALYSE', updated_at = ? WHERE id = ?`, [now, disputeId])
+        .then(() => recordStatusChange(disputeId, 'EN_ATTENTE_D_INFORMATIONS', 'EN_COURS_D_ANALYSE', userId, 'Client responded to information request'))
         .then(() => recordComment(disputeId, userId, comment))
         .then(() => {
           db.run('COMMIT', (commitErr) => {
@@ -756,7 +755,7 @@ async function respondToInfoRequest(disputeId, userId, comment) {
               db.run('ROLLBACK', () => {});
               return reject(new AppError('Internal server error', 500, '50000'));
             }
-            resolve({ disputeId, status: 'UNDER_REVIEW', respondDate: now });
+            resolve({ dispute_id: disputeId, status: 'EN_COURS_D_ANALYSE', respond_date: now });
           });
         })
         .catch((sqlErr) => {
@@ -778,31 +777,31 @@ async function respondToInfoRequest(disputeId, userId, comment) {
 function getDisputes({ role, userId, status, startDate, endDate }) {
   return new Promise((resolve, reject) => {
     let sql = `SELECT
-                 d.id AS disputeId,
-                 d.transactionId,
+                 d.id AS dispute_id,
+                 d.transaction_id,
                  d.reason,
                  d.description,
-                 d.amount AS claimAmount,
+                 d.amount,
                  d.currency,
                  d.status,
-                 d.createdAt,
-                 d.updatedAt`;
+                 d.created_at,
+                 d.updated_at`;
 
     if (role === 'CLIENT') {
-      sql += `, t.merchant`;
+      sql += `, t.merchant, t.transaction_date`;
       sql += ` FROM disputes d
-               JOIN transactions t ON d.transactionId = t.id`;
+               JOIN transactions t ON d.transaction_id = t.id`;
     } else {
-      sql += `, u.name AS clientName, d.userId AS userID`;
+      sql += `, u.nom AS client_name, d.client_id`;
       sql += ` FROM disputes d
-               LEFT JOIN users u ON d.userId = u.id`;
+               LEFT JOIN users u ON d.client_id = u.id`;
     }
 
     sql += ` WHERE 1=1`;
     const params = [];
 
     if (role === 'CLIENT') {
-      sql += ` AND t.userId = ?`;
+      sql += ` AND t.client_id = ?`;
       params.push(userId);
     }
 
@@ -812,21 +811,105 @@ function getDisputes({ role, userId, status, startDate, endDate }) {
     }
 
     if (startDate) {
-      sql += ` AND d.createdAt >= ?`;
+      sql += ` AND d.created_at >= ?`;
       params.push(startDate);
     }
 
     if (endDate) {
-      sql += ` AND d.createdAt <= ?`;
+      sql += ` AND d.created_at <= ?`;
       params.push(endDate);
     }
 
-    sql += ` ORDER BY d.createdAt DESC`;
+    sql += ` ORDER BY d.created_at DESC`;
 
     db.all(sql, params, (err, rows) => {
       if (err) return reject(new AppError('Internal server error', 500, '50000'));
       resolve(rows);
     });
+  });
+}
+
+// ─── HISTORIQUE DES STATUTS ────────────────────────────────────────────────
+
+function getDisputeHistory(disputeId) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, dispute_id, old_status, new_status, changed_by, reason, created_at
+       FROM dispute_status_history
+       WHERE dispute_id = ?
+       ORDER BY created_at ASC`,
+      [disputeId],
+      (err, rows) => {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve(rows || []);
+      }
+    );
+  });
+}
+
+// ─── COMMENTAIRES ──────────────────────────────────────────────────────────
+
+function getDisputeComments(disputeId) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, dispute_id, client_id, comment, created_at
+       FROM dispute_comments
+       WHERE dispute_id = ?
+       ORDER BY created_at ASC`,
+      [disputeId],
+      (err, rows) => {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve(rows || []);
+      }
+    );
+  });
+}
+
+// ─── DOCUMENTS ─────────────────────────────────────────────────────────────
+
+function getDisputeDocuments(disputeId) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, dispute_id, client_id, file_name, file_type, file_size, uploaded_at
+       FROM dispute_documents
+       WHERE dispute_id = ?
+       ORDER BY uploaded_at ASC`,
+      [disputeId],
+      (err, rows) => {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve(rows || []);
+      }
+    );
+  });
+}
+
+function getDocumentContent(documentId) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT id, dispute_id, client_id, file_name, file_type, file_size, file_content, uploaded_at
+       FROM dispute_documents
+       WHERE id = ?`,
+      [documentId],
+      (err, row) => {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve(row);
+      }
+    );
+  });
+}
+
+function createDocument(disputeId, userId, { fileName, fileType, fileContent }) {
+  const docId = randomUUID();
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO dispute_documents (id, dispute_id, client_id, file_name, file_type, file_path, file_size, file_content)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [docId, disputeId, userId, fileName, fileType, 'base64:inline', fileContent ? Math.ceil(fileContent.length * 3 / 4) : 0, fileContent],
+      function (err) {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve({ id: docId, dispute_id: disputeId, client_id: userId, file_name: fileName, file_type: fileType, uploaded_at: new Date().toISOString() });
+      }
+    );
   });
 }
 
@@ -851,4 +934,10 @@ module.exports = {
   respondToInfoRequest,
   // Consultation
   getDisputes,
+  // Sub-resources
+  getDisputeHistory,
+  getDisputeComments,
+  getDisputeDocuments,
+  getDocumentContent,
+  createDocument,
 };

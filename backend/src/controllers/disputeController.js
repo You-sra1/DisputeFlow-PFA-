@@ -5,7 +5,7 @@ const AppError = require('../utils/AppError');
 async function assertDisputeAccess(disputeId, user) {
   const dispute = await disputeService.findDisputeById(disputeId);
   if (!dispute) throw new AppError('Dispute not found', 404, '40402');
-  if (user.role === 'CLIENT' && dispute.userId !== user.id) {
+  if (user.role === 'CLIENT' && dispute.client_id !== user.id) {
     throw new AppError('Access denied', 403, '40300');
   }
   return dispute;
@@ -43,7 +43,7 @@ async function createDispute(req, res, next) {
 
     const transaction = await disputeService.findTransactionById(transactionId);
     if (!transaction) throw new AppError('Transaction not found', 404, '40401');
-    if (transaction.userId !== userId) throw new AppError('Access denied to this transaction', 403, '40301');
+    if (transaction.client_id !== userId) throw new AppError('Access denied to this transaction', 403, '40301');
 
     const activeDispute = await disputeService.findActiveDisputeByTransactionId(transactionId);
     if (activeDispute) throw new AppError('An active dispute already exists for this transaction', 409, '40901');
@@ -51,10 +51,10 @@ async function createDispute(req, res, next) {
     const result = await disputeService.createDispute({ transactionId, reason, description, claimAmount, currency, userId });
 
     return res.status(201).json(successResponse({
-      disputeId: result.disputeId,
-      transactionId: result.transactionId,
+      dispute_id: result.dispute_id,
+      transaction_id: result.transaction_id,
       status: result.status,
-      createdAt: result.createdAt,
+      created_at: result.created_at,
     }));
   } catch (err) {
     next(err);
@@ -62,9 +62,8 @@ async function createDispute(req, res, next) {
 }
 
 const VALID_STATUSES = [
-  'SUBMITTED', 'UNDER_REVIEW', 'WAITING_FOR_INFORMATION', 'APPROVED',
-  'REJECTED', 'CHARGEBACK_INITIATED', 'MERCHANT_RESPONSE_RECEIVED',
-  'REFUND_COMPLETED', 'CLOSED',
+  'SOUMIS', 'EN_COURS_D_ANALYSE', 'EN_ATTENTE_D_INFORMATIONS', 'APPROUVE',
+  'REJETE', 'CHARGEBACK_INITIE', 'REMBOURSEMENT_EFFECTUE', 'CLOTURE',
 ];
 
 async function getDisputes(req, res, next) {
@@ -99,112 +98,118 @@ async function getDisputes(req, res, next) {
 
 async function review(req, res, next) {
   try {
-    const { requestInfo, disputeId, comment } = req.body;
+    const { id } = req.params;
+    const { requestInfo, comment } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
     if (!comment || typeof comment !== 'string' || comment.trim().length === 0) throw new AppError('Missing comment', 400, '40031');
 
-    const result = await disputeService.reviewDispute(disputeId, operatorId, comment);
+    const result = await disputeService.reviewDispute(id, operatorId, comment);
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, reviewedBy: result.reviewedBy, reviewDate: result.reviewDate,
+      dispute_id: result.dispute_id, status: result.status, reviewed_by: result.reviewed_by, review_date: result.review_date,
     }));
   } catch (err) { next(err); }
 }
 
 async function requestInfo(req, res, next) {
   try {
-    const { requestInfo, disputeId, message, comment } = req.body;
+    const { id } = req.params;
+    const { requestInfo, message, comment } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
 
     const effectiveMessage = message || comment;
     if (!effectiveMessage || typeof effectiveMessage !== 'string' || effectiveMessage.trim().length === 0) {
       throw new AppError('Missing message', 400, '40033');
     }
 
-    const result = await disputeService.requestInfo(disputeId, operatorId, effectiveMessage);
+    const result = await disputeService.requestInfo(id, operatorId, effectiveMessage);
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, requestedInformation: result.requestedInformation,
+      dispute_id: result.dispute_id, status: result.status, requested_information: result.requested_information,
     }));
   } catch (err) { next(err); }
 }
 
 async function approve(req, res, next) {
   try {
-    const { requestInfo, disputeId, comment } = req.body;
+    const { id } = req.params;
+    const { requestInfo, comment } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
     if (!comment || typeof comment !== 'string' || comment.trim().length === 0) throw new AppError('Missing comment', 400, '40031');
 
-    const result = await disputeService.approveDispute(disputeId, operatorId, comment);
+    const result = await disputeService.approveDispute(id, operatorId, comment);
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, approvedBy: result.approvedBy,
+      dispute_id: result.dispute_id, status: result.status, approved_by: result.approved_by,
     }));
   } catch (err) { next(err); }
 }
 
 async function reject(req, res, next) {
   try {
-    const { requestInfo, disputeId, reason, comment } = req.body;
+    const { id } = req.params;
+    const { requestInfo, reason, comment } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
 
     const effectiveReason = reason || comment;
     if (!effectiveReason || typeof effectiveReason !== 'string' || effectiveReason.trim().length === 0) {
       throw new AppError('Missing reason', 400, '40032');
     }
 
-    const result = await disputeService.rejectDispute(disputeId, operatorId, effectiveReason, comment || '');
+    const result = await disputeService.rejectDispute(id, operatorId, effectiveReason, comment || '');
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, reason: result.reason,
+      dispute_id: result.dispute_id, status: result.status, reason: result.reason,
     }));
   } catch (err) { next(err); }
 }
 
 async function chargeback(req, res, next) {
   try {
-    const { requestInfo, disputeId, chargebackReasonCode, network, comment } = req.body;
+    const { id } = req.params;
+    const { requestInfo, chargebackReasonCode, network, comment } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
     if (!chargebackReasonCode || typeof chargebackReasonCode !== 'string') throw new AppError('Missing chargebackReasonCode', 400, '40040');
     if (!network || typeof network !== 'string') throw new AppError('Invalid network, must be Visa or Mastercard', 400, '40041');
 
-    const result = await disputeService.chargebackDispute(disputeId, operatorId, chargebackReasonCode, network, comment || '');
+    const result = await disputeService.chargebackDispute(id, operatorId, chargebackReasonCode, network, comment || '');
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, chargebackReference: result.chargebackReference,
+      dispute_id: result.dispute_id, status: result.status, chargeback_reference: result.chargeback_reference,
     }));
   } catch (err) { next(err); }
 }
 
 async function refund(req, res, next) {
   try {
-    const { requestInfo, disputeId, refundAmount, currency, refundMethod } = req.body;
+    const { id } = req.params;
+    const { requestInfo, refundAmount, currency, refundMethod } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
     if (refundAmount === undefined || refundAmount === null || typeof refundAmount !== 'number' || refundAmount <= 0) {
       throw new AppError('Invalid refundAmount', 400, '40050');
     }
@@ -213,22 +218,23 @@ async function refund(req, res, next) {
     const allowedMethods = ['CARD_CREDIT', 'BANK_TRANSFER'];
     if (!refundMethod || !allowedMethods.includes(refundMethod)) throw new AppError('Invalid refundMethod', 400, '40053');
 
-    const result = await disputeService.refundDispute(disputeId, operatorId, refundAmount, currency, refundMethod);
+    const result = await disputeService.refundDispute(id, operatorId, refundAmount, currency, refundMethod);
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, refundAmount: result.refundAmount, currency: result.currency,
+      dispute_id: result.dispute_id, status: result.status, refund_amount: result.refund_amount, currency: result.currency,
     }));
   } catch (err) { next(err); }
 }
 
 async function close(req, res, next) {
   try {
-    const { requestInfo, disputeId, closureReason, comment } = req.body;
+    const { id } = req.params;
+    const { requestInfo, closureReason, comment } = req.body;
     const operatorId = req.user.id;
 
     if (!requestInfo || !requestInfo.requestUID || !requestInfo.requestDate || !requestInfo.userID) {
       throw new AppError('Missing or invalid requestInfo', 400, '40001');
     }
-    if (!disputeId || typeof disputeId !== 'string') throw new AppError('Missing disputeId', 400, '40030');
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
 
     const validClosureReasons = ['CASE_RESOLVED', 'REJECTED_FINAL', 'REFUND_ISSUED', 'OTHER'];
     if (!closureReason || !validClosureReasons.includes(closureReason)) {
@@ -238,9 +244,9 @@ async function close(req, res, next) {
       throw new AppError('Missing comment', 400, '40031');
     }
 
-    const result = await disputeService.closeDispute(disputeId, operatorId, closureReason, comment);
+    const result = await disputeService.closeDispute(id, operatorId, closureReason, comment);
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, closedDate: result.closedDate,
+      dispute_id: result.dispute_id, status: result.status, closed_date: result.closed_date,
     }));
   } catch (err) { next(err); }
 }
@@ -248,22 +254,93 @@ async function close(req, res, next) {
 async function respondToInfoRequest(req, res, next) {
   try {
     const { id } = req.params;
-    const { comment } = req.body;
+    const comment = req.body.comment || req.body.message;
 
     if (!comment || typeof comment !== 'string' || comment.trim().length === 0) {
       throw new AppError('Comment is required', 400, '40080');
     }
 
     const dispute = await assertDisputeAccess(id, req.user);
-    if (dispute.status !== 'WAITING_FOR_INFORMATION') {
-      throw new AppError('Dispute must be WAITING_FOR_INFORMATION', 409, '40908');
+    if (dispute.status !== 'EN_ATTENTE_D_INFORMATIONS') {
+      throw new AppError('Dispute must be EN_ATTENTE_D_INFORMATIONS', 409, '40908');
     }
 
     const result = await disputeService.respondToInfoRequest(id, req.user.id, comment.trim());
     return res.status(200).json(successResponse({
-      disputeId: result.disputeId, status: result.status, respondedBy: req.user.id, respondDate: result.respondDate,
+      dispute_id: result.dispute_id, status: result.status, responded_by: req.user.id, respond_date: result.respond_date,
     }));
   } catch (err) { next(err); }
 }
 
-module.exports = { createDispute, getDisputes, review, requestInfo, approve, reject, chargeback, refund, close, respondToInfoRequest };
+async function getDisputeHistory(req, res, next) {
+  try {
+    const { id } = req.params;
+    await assertDisputeAccess(id, req.user);
+    const history = await disputeService.getDisputeHistory(id);
+    return res.status(200).json(successResponse(history));
+  } catch (err) { next(err); }
+}
+
+async function getDisputeComments(req, res, next) {
+  try {
+    const { id } = req.params;
+    await assertDisputeAccess(id, req.user);
+    const comments = await disputeService.getDisputeComments(id);
+    return res.status(200).json(successResponse(comments));
+  } catch (err) { next(err); }
+}
+
+async function getDisputeDocuments(req, res, next) {
+  try {
+    const { id } = req.params;
+    await assertDisputeAccess(id, req.user);
+    const documents = await disputeService.getDisputeDocuments(id);
+    return res.status(200).json(successResponse(documents));
+  } catch (err) { next(err); }
+}
+
+async function uploadDisputeDocument(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { fileName, fileType, fileContent } = req.body;
+
+    if (!fileName || typeof fileName !== 'string') throw new AppError('Missing fileName', 400, '40070');
+    if (!fileType || typeof fileType !== 'string') throw new AppError('Missing fileType', 400, '40071');
+    if (!fileContent || typeof fileContent !== 'string') throw new AppError('Missing fileContent', 400, '40072');
+
+    await assertDisputeAccess(id, req.user);
+    const doc = await disputeService.createDocument(id, req.user.id, { fileName, fileType, fileContent });
+    return res.status(201).json(successResponse(doc));
+  } catch (err) { next(err); }
+}
+
+async function getDocumentContent(req, res, next) {
+  try {
+    const { documentId } = req.params;
+    const doc = await disputeService.getDocumentContent(documentId);
+    if (!doc) throw new AppError('Document not found', 404, '40403');
+
+    const dispute = await assertDisputeAccess(doc.dispute_id, req.user);
+    return res.status(200).json(successResponse(doc));
+  } catch (err) { next(err); }
+}
+
+async function getDisputeById(req, res, next) {
+  try {
+    const { id } = req.params;
+    const dispute = await assertDisputeAccess(id, req.user);
+    return res.status(200).json(successResponse({
+      dispute_id: dispute.id,
+      transaction_id: dispute.transaction_id,
+      client_id: dispute.client_id,
+      status: dispute.status,
+      amount: dispute.amount,
+      currency: dispute.currency,
+    }));
+  } catch (err) { next(err); }
+}
+
+module.exports = {
+  createDispute, getDisputes, getDisputeById, review, requestInfo, approve, reject, chargeback, refund, close, respondToInfoRequest,
+  getDisputeHistory, getDisputeComments, getDisputeDocuments, uploadDisputeDocument, getDocumentContent,
+};

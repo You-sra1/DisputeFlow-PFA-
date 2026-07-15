@@ -1,110 +1,119 @@
+// ============================================================================
+// ClientTransactions.jsx — Liste des transactions du client (GET /transactions),
+// avec pour chaque ligne un accès direct pour créer un litige, ou un badge
+// indiquant qu'un litige est déjà en cours sur cette transaction.
+// ============================================================================
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
-import StatusBadge from '../components/StatusBadge';
+import Layout from '../components/Layout';
+import { Loading, ErrorBanner } from '../components/Feedback';
 import { useAuth } from '../context/AuthContext';
-import { transactionsAPI, disputesAPI } from '../api';
+import * as api from '../api';
 
 export default function ClientTransactions() {
-  const { user, token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
 
   const [transactions, setTransactions] = useState([]);
-  const [disputes, setDisputes] = useState([]);
+  const [disputedTxnIds, setDisputedTxnIds] = useState(new Map()); // transactionId -> disputeId actif
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const [txns, disputes] = await Promise.all([
+          api.getTransactions(token, user.id, {}),
+          api.getDisputes(token, user.id, { status: 'ALL' }),
+        ]);
+        if (cancelled) return;
+        setTransactions(txns);
+
+        // Un litige "actif" bloque une nouvelle contestation sur la même
+        // transaction (le backend refuse avec 40901 sinon) : on croise donc
+        // les transactionId des litiges non REJETE/CLOTURE.
+        const map = new Map();
+        disputes
+          .filter((d) => d.status !== 'REJETE' && d.status !== 'CLOTURE')
+          .forEach((d) => map.set(d.transaction_id, d.dispute_id));
+        setDisputedTxnIds(map);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
     load();
-    loadDisputes();
-  }, []);
-
-  async function load() {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await transactionsAPI.list(token, user.id);
-      setTransactions(data || []);
-    } catch (err) {
-      setError(err.errorDescription || 'Unable to load transactions.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadDisputes() {
-    try {
-      const data = await disputesAPI.list(token, user.id, { status: 'ALL' });
-      setDisputes(data || []);
-    } catch {
-      // ignore
-    }
-  }
-
-  function getActiveDispute(transactionId) {
-    return disputes.find(
-      (d) => d.transactionId === transactionId && !['REJECTED', 'CLOSED'].includes(d.status)
-    );
-  }
+    return () => { cancelled = true; };
+  }, [token, user.id]);
 
   return (
-    <DashboardLayout breadcrumb="Home > Transactions">
-      <h1>Transactions</h1>
+    <Layout role="CLIENT" breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Transactions' }]}>
+      <div className="page-header">
+        <h1>Transactions</h1>
+      </div>
 
-      {error && <p className="error-text">{error}</p>}
+      <ErrorBanner message={error} />
 
-      <div className="card">
+      <div className="content-card">
         {loading ? (
-          <p>Loading...</p>
+          <Loading />
+        ) : transactions.length === 0 ? (
+          <p className="empty-state">No transactions to display.</p>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Transaction ID</th>
-                <th>Merchant</th>
-                <th>Amount</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Dispute</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => {
-                const active = getActiveDispute(t.transactionId);
-                return (
-                  <tr key={t.transactionId}>
-                    <td>{t.transactionId}</td>
-                    <td>{t.merchant}</td>
-                    <td>{t.amount} {t.currency}</td>
-                    <td>{t.transactionDate}</td>
-                    <td><StatusBadge status={t.status} /></td>
-                    <td>
-                      {active ? (
-                        <button
-                          className="btn-link badge-dispute-active"
-                          onClick={() => navigate(`/disputes/${active.disputeId}`)}
-                        >
-                          Dispute in progress
-                        </button>
-                      ) : (
-                        <button
-                          className="btn-link"
-                          onClick={() => navigate('/disputes/new', { state: { transactionId: t.transactionId } })}
-                        >
-                          Dispute this transaction
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {transactions.length === 0 && (
-                <tr><td colSpan="6" className="empty-state">No transactions found.</td></tr>
-              )}
-            </tbody>
-          </table>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Merchant</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Dispute</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((t) => {
+                  const activeDisputeId = disputedTxnIds.get(t.transaction_id);
+                  return (
+                    <tr key={t.transaction_id}>
+                      <td>{t.transaction_id}</td>
+                      <td>{t.merchant}</td>
+                      <td>{t.amount} {t.currency}</td>
+                      <td>{t.transaction_date}</td>
+                      <td>{t.status}</td>
+                      <td>
+                        {activeDisputeId ? (
+                          <button
+                            type="button"
+                            className="badge-link"
+                            onClick={() => navigate(`/disputes/${activeDisputeId}`)}
+                          >
+                            Dispute in progress
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-secondary btn-small"
+                            onClick={() => navigate('/disputes/new', { state: { transactionId: t.transaction_id } })}
+                          >
+                            Dispute this transaction
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
-    </DashboardLayout>
+    </Layout>
   );
 }

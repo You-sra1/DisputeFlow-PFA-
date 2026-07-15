@@ -1,52 +1,67 @@
+// ============================================================================
+// Analytics.jsx — Vue complète des statistiques (les 9 statuts et 9 motifs
+// en entier, pas seulement l'aperçu à 5 lignes du dashboard), plus le délai
+// moyen de traitement.
+// ============================================================================
+
 import { useEffect, useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import Layout from '../components/Layout';
 import BarChartCard from '../components/BarChartCard';
+import { Loading, ErrorBanner } from '../components/Feedback';
 import { useAuth } from '../context/AuthContext';
-import { disputesAPI } from '../api';
-import { STATUS_LABEL_FR, REASON_LABEL } from '../constants/statusConfig';
-
-const STATUS_COLORS = ['#1a56db', '#7ba9f4', '#22c55e', '#ef4444', '#f59e0b', '#9ca3af'];
-const REASON_COLORS = ['#1a56db', '#7ba9f4', '#22c55e', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#9ca3af'];
-
-function computeDistribution(items, key, labelMap) {
-  const counts = {};
-  items.forEach((item) => {
-    const val = item[key] || 'UNKNOWN';
-    counts[val] = (counts[val] || 0) + 1;
-  });
-  return Object.entries(counts)
-    .map(([name, count]) => ({ label: labelMap[name] || name.replace(/_/g, ' '), count }))
-    .sort((a, b) => b.count - a.count);
-}
+import * as api from '../api';
+import { STATUS_LABELS, STATUS_COLORS, REASON_LABELS } from '../constants';
 
 export default function Analytics() {
-  const { user, token } = useAuth();
-  const [statusDist, setStatusDist] = useState([]);
-  const [reasonDist, setReasonDist] = useState([]);
+  const { token } = useAuth();
+  const [statusData, setStatusData] = useState([]);
+  const [reasonData, setReasonData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError('');
       try {
-        const list = await disputesAPI.list(token, user.id, { status: 'ALL' });
-        setStatusDist(computeDistribution(list || [], 'status', STATUS_LABEL_FR));
-        setReasonDist(computeDistribution(list || [], 'reason', REASON_LABEL));
-      } catch {
-        // ignore
+        const [statusRes, reasonRes] = await Promise.all([
+          api.getStatusDistribution(token),
+          api.getReasonDistribution(token),
+        ]);
+        if (cancelled) return;
+        setStatusData(statusRes.map((s) => ({
+          key: s.status, label: STATUS_LABELS[s.status] || s.status, count: s.count, color: STATUS_COLORS[s.status],
+        })).sort((a, b) => b.count - a.count));
+        setReasonData(reasonRes.map((r) => ({
+          key: r.reason, label: REASON_LABELS[r.reason] || r.reason, count: r.count, color: '#4c6ef5',
+        })).sort((a, b) => b.count - a.count));
+      } catch (err) {
+        if (!cancelled) setError(err.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
-  }, []);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [token]);
 
   return (
-    <DashboardLayout breadcrumb="Home / Analytics" showMenuIcon>
-      <h1>Analytics</h1>
-      {loading && <p>Loading...</p>}
-      <div className="two-col-grid">
-        <BarChartCard title="Status Distribution" data={statusDist} colors={STATUS_COLORS} />
-        <BarChartCard title="Reason Distribution" data={reasonDist} colors={REASON_COLORS} />
+    <Layout role="OPERATOR" breadcrumb={[{ label: 'Home', to: '/operator/dashboard' }, { label: 'Analytics' }]}>
+      <div className="page-header">
+        <h1>Analytics</h1>
       </div>
-    </DashboardLayout>
+
+      <ErrorBanner message={error} />
+
+      {loading ? (
+        <Loading />
+      ) : (
+        <div className="two-col-grid">
+          <BarChartCard title="Status Distribution (All)" data={statusData} />
+          <BarChartCard title="Reason Distribution (All)" data={reasonData} />
+        </div>
+      )}
+    </Layout>
   );
 }

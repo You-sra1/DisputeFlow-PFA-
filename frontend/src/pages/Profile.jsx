@@ -1,164 +1,93 @@
+// ============================================================================
+// Profile.jsx — Affiche les informations du compte connecté, avec un
+// véritable bouton d'édition : les modifications sont envoyées à PUT /me,
+// persistées en base, et reflétées immédiatement dans le header (AuthContext).
+// ============================================================================
+
 import { useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import Layout from '../components/Layout';
+import { ErrorBanner, SuccessBanner } from '../components/Feedback';
 import { useAuth } from '../context/AuthContext';
-import { profileAPI } from '../api';
+import * as api from '../api';
 
 export default function Profile() {
-  const { user, token, setUser } = useAuth();
-
-  const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
+  const { token, user, updateUser } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(user.nom);
+  const [email, setEmail] = useState(user.email);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
 
-  const [currentPwd, setCurrentPwd] = useState('');
-  const [newPwd, setNewPwd] = useState('');
-  const [confirmPwd, setConfirmPwd] = useState('');
-  const [savingPwd, setSavingPwd] = useState(false);
-  const [pwdMsg, setPwdMsg] = useState(null);
+  function startEditing() {
+    setName(user.nom);
+    setEmail(user.email);
+    setError('');
+    setSuccess('');
+    setEditing(true);
+  }
 
-  async function handleSaveProfile(e) {
-    e.preventDefault();
+  function cancelEditing() {
+    setEditing(false);
+    setError('');
+  }
+
+  async function handleSave() {
     setSaving(true);
-    setMsg(null);
+    setError('');
     try {
-      const updated = await profileAPI.update(token, user.id, { name: name.trim(), email: email.trim() });
-      setUser(updated);
-      setMsg({ type: 'success', text: 'Profile updated successfully.' });
+      const updated = await api.updateMe(token, user.id, { name, email });
+      updateUser(updated);
+      setSuccess('Profile updated successfully.');
+      setEditing(false);
     } catch (err) {
-      setMsg({ type: 'error', text: err?.errorDescription || 'Update failed.' });
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleChangePassword(e) {
-    e.preventDefault();
-    if (newPwd !== confirmPwd) {
-      setPwdMsg({ type: 'error', text: 'New passwords do not match.' });
-      return;
-    }
-    if (newPwd.length < 6) {
-      setPwdMsg({ type: 'error', text: 'New password must be at least 6 characters.' });
-      return;
-    }
-    setSavingPwd(true);
-    setPwdMsg(null);
-    try {
-      await profileAPI.changePassword(token, user.id, { currentPassword: currentPwd, newPassword: newPwd });
-      setPwdMsg({ type: 'success', text: 'Password changed successfully.' });
-      setCurrentPwd('');
-      setNewPwd('');
-      setConfirmPwd('');
-    } catch (err) {
-      setPwdMsg({ type: 'error', text: err?.errorDescription || 'Password change failed.' });
-    } finally {
-      setSavingPwd(false);
-    }
-  }
-
   return (
-    <DashboardLayout breadcrumb="Home > Profile">
-      <h1>Profile</h1>
-
-      {/* ── Informations personnelles ── */}
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h3 style={{ marginBottom: '1rem' }}>Personal Information</h3>
-        <form onSubmit={handleSaveProfile}>
-          <div className="form-group">
-            <label className="form-label">User ID</label>
-            <input className="form-input" value={user?.id || ''} disabled />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Role</label>
-            <input className="form-input" value={user?.role || ''} disabled />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Name</label>
-            <input
-              className="form-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <input
-              className="form-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          {msg && (
-            <div className={`alert alert-${msg.type}`} style={{ marginBottom: '1rem' }}>
-              {msg.text}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saving}
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </form>
+    <Layout role={user.role} breadcrumb={[{ label: 'Home', to: user.role === 'OPERATOR' ? '/operator/dashboard' : '/dashboard' }, { label: 'Profile' }]}>
+      <div className="page-header">
+        <h1>Profile</h1>
+        {!editing && (
+          <button type="button" className="btn-secondary" onClick={startEditing}>Edit</button>
+        )}
       </div>
 
-      {/* ── Changement de mot de passe ── */}
-      <div className="card">
-        <h3 style={{ marginBottom: '1rem' }}>Change Password</h3>
-        <form onSubmit={handleChangePassword}>
-          <div className="form-group">
-            <label className="form-label">Current Password</label>
-            <input
-              className="form-input"
-              type="password"
-              value={currentPwd}
-              onChange={(e) => setCurrentPwd(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">New Password</label>
-            <input
-              className="form-input"
-              type="password"
-              value={newPwd}
-              onChange={(e) => setNewPwd(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Confirm New Password</label>
-            <input
-              className="form-input"
-              type="password"
-              value={confirmPwd}
-              onChange={(e) => setConfirmPwd(e.target.value)}
-              required
-            />
-          </div>
+      <ErrorBanner message={error} />
+      <SuccessBanner message={success} />
 
-          {pwdMsg && (
-            <div className={`alert alert-${pwdMsg.type}`} style={{ marginBottom: '1rem' }}>
-              {pwdMsg.text}
+      <div className="content-card">
+        {editing ? (
+          <div className="dispute-form">
+            <label className="form-field">
+              <span>Name</span>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <div className="action-buttons">
+              <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" className="btn-secondary" onClick={cancelEditing} disabled={saving}>
+                Cancel
+              </button>
             </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={savingPwd}
-          >
-            {savingPwd ? 'Changing...' : 'Change Password'}
-          </button>
-        </form>
+          </div>
+        ) : (
+          <div className="detail-grid">
+            <div className="detail-row"><span className="detail-label">Name:</span><span className="detail-value">{user.nom}</span></div>
+            <div className="detail-row"><span className="detail-label">Email:</span><span className="detail-value">{user.email}</span></div>
+            <div className="detail-row"><span className="detail-label">Role:</span><span className="detail-value">{user.role}</span></div>
+            <div className="detail-row"><span className="detail-label">User ID:</span><span className="detail-value">{user.id}</span></div>
+          </div>
+        )}
       </div>
-    </DashboardLayout>
+    </Layout>
   );
 }

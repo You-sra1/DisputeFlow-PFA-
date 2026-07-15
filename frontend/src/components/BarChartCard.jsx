@@ -1,40 +1,41 @@
+// ============================================================================
+// BarChartCard.jsx — Carte affichant une répartition (statuts ou motifs)
+// sous forme de barres horizontales colorées, avec un lien "View All"
+// vers la page Analytics pour la vue complète.
+// ============================================================================
+
 import { Link } from 'react-router-dom';
 
-// Implémenté en CSS pur (pas de dépendance recharts/chart.js à installer).
-// Si vous préférez recharts pour des graphiques plus riches, dites-le-moi et
-// je le réécris avec <BarChart> — la structure de données (data) reste identique.
-export default function BarChartCard({ title, data = [], colors = [], viewAllLink }) {
-  const total = data.reduce((sum, d) => sum + (d.count || 0), 0) || 1;
+export default function BarChartCard({ title, data, viewAllTo, limit }) {
+  const total = data.reduce((sum, item) => sum + item.count, 0) || 1;
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const rows = limit ? data.slice(0, limit) : data;
 
   return (
-    <div className="card bar-chart-card">
-      <div className="card-header">
+    <div className="chart-card">
+      <div className="chart-card-header">
         <h3>{title}</h3>
-        {viewAllLink && <Link to={viewAllLink} className="link-cell">View All</Link>}
+        {viewAllTo && <Link to={viewAllTo} className="view-all-link">View All</Link>}
       </div>
-      {data.length === 0 ? (
-        <p className="empty-state">No data available.</p>
-      ) : (
-        <div className="bar-list">
-          {data.map((item, i) => (
-            <div className="bar-row" key={item.label}>
-              <div className="bar-label">{item.label}</div>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{
-                    width: `${(item.count / total) * 100}%`,
-                    background: colors[i % colors.length] || '#1a56db',
-                  }}
-                />
-              </div>
-              <div className="bar-value">
-                {item.count} ({Math.round((item.count / total) * 100)}%)
-              </div>
+      <div className="chart-rows">
+        {rows.map((item) => (
+          <div className="chart-row" key={item.key}>
+            <span className="chart-row-label">{item.label}</span>
+            <div className="chart-row-bar-track">
+              <div
+                className="chart-row-bar-fill"
+                style={{
+                  width: `${(item.count / maxCount) * 100}%`,
+                  background: item.color,
+                }}
+              />
             </div>
-          ))}
-        </div>
-      )}
+            <span className="chart-row-value">
+              {item.count} ({((item.count / total) * 100).toFixed(0)}%)
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

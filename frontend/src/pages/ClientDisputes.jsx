@@ -1,55 +1,65 @@
-import { useEffect, useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
-import DisputesTable from '../components/DisputesTable';
-import { useAuth } from '../context/AuthContext';
-import { usePreferences } from '../context/PreferencesContext';
-import { disputesAPI } from '../api';
+// ============================================================================
+// ClientDisputes.jsx — Liste complète des litiges du client, filtrable par
+// statut (GET /disputes?status=...). Le bouton "New Dispute" n'apparaît
+// PAS ici : il n'est disponible que depuis la page Home, par choix produit.
+// ============================================================================
 
-const STATUS_OPTIONS = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'WAITING_FOR_INFORMATION', 'APPROVED', 'REJECTED', 'CHARGEBACK_INITIATED', 'MERCHANT_RESPONSE_RECEIVED', 'REFUND_COMPLETED', 'CLOSED'];
+import { useEffect, useState } from 'react';
+import Layout from '../components/Layout';
+import DisputesTable from '../components/DisputesTable';
+import { Loading, ErrorBanner } from '../components/Feedback';
+import { useAuth } from '../context/AuthContext';
+import * as api from '../api';
+import { DISPUTE_STATUSES, STATUS_LABELS } from '../constants';
 
 export default function ClientDisputes() {
-  const { user, token } = useAuth();
-  const { rowsPerPage, compact } = usePreferences();
+  const { token, user } = useAuth();
   const [disputes, setDisputes] = useState([]);
   const [status, setStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => { load(); }, [status]);
-
-  async function load() {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await disputesAPI.list(token, user.id, { status });
-      setDisputes(data || []);
-    } catch (err) {
-      setError(err.errorDescription || 'Unable to load disputes.');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const data = await api.getDisputes(token, user.id, { status });
+        if (!cancelled) setDisputes(data);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }
+    load();
+    return () => { cancelled = true; };
+  }, [token, user.id, status]);
 
   return (
-    <DashboardLayout breadcrumb="Home > My Disputes">
+    <Layout role="CLIENT" breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'My Disputes' }]}>
       <div className="page-header">
         <h1>My Disputes</h1>
       </div>
 
       <div className="filter-row">
-        <div className="filter-group">
-          <label>Status:</label>
+        <label>
+          Status:
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            <option value="ALL">ALL</option>
+            {DISPUTE_STATUSES.map((s) => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
           </select>
-        </div>
+        </label>
       </div>
 
-      {error && <p className="error-text">{error}</p>}
+      <ErrorBanner message={error} />
 
-      <div className="card">
-        {loading ? <p>Loading...</p> : <DisputesTable disputes={disputes} variant="client" rows={rowsPerPage} compact={compact} />}
+      <div className="content-card">
+        {loading ? <Loading /> : <DisputesTable disputes={disputes} mode="client" />}
       </div>
-    </DashboardLayout>
+    </Layout>
   );
 }

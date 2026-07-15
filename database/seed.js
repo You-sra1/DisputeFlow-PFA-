@@ -34,20 +34,20 @@
 //   TXN005 | CLIENT001  | Steam          | 89.99    | 2026-07-05 | COMPLETED
 //
 // ══════════════════════════════════════════════════════════════════════════════
-// LITIGES (10 disputes – 1 par statut + 1 CLOSED supplémentaire)
+// LITIGES (10 disputes – 1 par statut + 1 CLOTURE supplémentaire)
 // ══════════════════════════════════════════════════════════════════════════════
 //   ID     | Statut                     | Motif                          | Client
 //   --------|----------------------------|--------------------------------|----------
-//   DSP001  | SUBMITTED                  | UNAUTHORIZED_TRANSACTION       | CLIENT001
-//   DSP002  | UNDER_REVIEW               | DOUBLE_CHARGE                  | CLIENT002
-//   DSP003  | WAITING_FOR_INFORMATION    | GOODS_NOT_RECEIVED             | CLIENT001
-//   DSP004  | APPROVED                   | SERVICE_NOT_PROVIDED           | CLIENT002
-//   DSP005  | REJECTED (pas clôturé)     | INCORRECT_AMOUNT               | CLIENT001
-//   DSP006  | CHARGEBACK_INITIATED       | CANCELLED_RECURRING_PAYMENT    | CLIENT002
-//   DSP007  | MERCHANT_RESPONSE_RECEIVED | FRAUD                          | CLIENT001
-//   DSP008  | REFUND_COMPLETED           | ATM_CASH_NOT_DISPENSED         | CLIENT002
-//   DSP009  | CLOSED (issu d'un rejet)   | OTHER                          | CLIENT001
-//   DSP010  | CLOSED (issu d'un rembours)| UNAUTHORIZED_TRANSACTION       | CLIENT002
+//   DSP001  | SOUMIS                     | UNAUTHORIZED_TRANSACTION       | CLIENT001
+//   DSP002  | EN_COURS_D_ANALYSE         | DOUBLE_CHARGE                  | CLIENT002
+//   DSP003  | EN_ATTENTE_D_INFORMATIONS  | GOODS_NOT_RECEIVED             | CLIENT001
+//   DSP004  | APPROUVE                   | SERVICE_NOT_PROVIDED           | CLIENT002
+//   DSP005  | REJETE (pas clôturé)       | INCORRECT_AMOUNT               | CLIENT001
+//   DSP006  | CHARGEBACK_INITIE          | CANCELLED_RECURRING_PAYMENT    | CLIENT002
+//   DSP007  | CHARGEBACK_INITIE          | FRAUD                          | CLIENT001
+//   DSP008  | REMBOURSEMENT_EFFECTUE     | ATM_CASH_NOT_DISPENSED         | CLIENT002
+//   DSP009  | CLOTURE (issu d'un rejet)  | OTHER                          | CLIENT001
+//   DSP010  | CLOTURE (issu d'un rembours)| UNAUTHORIZED_TRANSACTION      | CLIENT002
 // ══════════════════════════════════════════════════════════════════════════════
 
 const path = require('path');
@@ -107,7 +107,7 @@ async function seedUsers() {
 
   for (const u of users) {
     await run(
-      `INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO users (id, nom, email, password, role) VALUES (?, ?, ?, ?, ?)`,
       [u.id, u.name, u.email, hash, u.role]
     );
     console.log(`  ✓ ${u.id} – ${u.name} (${u.email}) [${u.role}]`);
@@ -130,7 +130,7 @@ async function seedCards() {
 
   for (const c of cards) {
     await run(
-      `INSERT INTO cards (id, userId, cardNumber, cardType, expiryDate, cardholderName)
+      `INSERT INTO cards (id, client_id, card_number, card_type, expiry_date, cardholder_name)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [c.id, c.userId, c.cardNumber, c.cardType, c.expiryDate, c.cardholderName]
     );
@@ -152,7 +152,7 @@ async function seedTransactions() {
 
   for (const t of transactions) {
     await run(
-      `INSERT INTO transactions (id, userId, cardId, amount, currency, merchant, merchantCategory, status, transactionDate, description)
+      `INSERT INTO transactions (id, client_id, card_id, amount, currency, merchant, merchant_category, status, transaction_date, description)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [t.id, t.userId, t.cardId, t.amount, t.currency, t.merchant, t.merchantCategory, t.status, t.transactionDate, t.description]
     );
@@ -164,21 +164,21 @@ async function seedTransactions() {
 async function seedDisputes() {
   console.log('Insertion des litiges...');
   const disputes = [
-    { id: 'DSP001', transactionId: 'TXN001', userId: 'CLIENT001', reason: 'UNAUTHORIZED_TRANSACTION', description: 'Transaction que je n\'ai pas autorisée sur mon compte.', amount: 250.75, currency: 'USD', status: 'SUBMITTED', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-07-10 10:00:00', updatedAt: '2026-07-10 10:00:00' },
-    { id: 'DSP002', transactionId: 'TXN003', userId: 'CLIENT002', reason: 'DOUBLE_CHARGE', description: 'J\'ai été facturé deux fois pour la même commande Uber Eats.', amount: 67.50, currency: 'USD', status: 'UNDER_REVIEW', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-07-08 09:00:00', updatedAt: '2026-07-09 11:00:00' },
-    { id: 'DSP003', transactionId: 'TXN002', userId: 'CLIENT001', reason: 'GOODS_NOT_RECEIVED', description: 'Les marchandises commandées n\'ont jamais été livrées.', amount: 14.99, currency: 'USD', status: 'WAITING_FOR_INFORMATION', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-07-05 08:30:00', updatedAt: '2026-07-07 10:00:00' },
-    { id: 'DSP004', transactionId: 'TXN004', userId: 'CLIENT002', reason: 'SERVICE_NOT_PROVIDED', description: 'Le service réservé sur Booking.com n\'a pas été rendu.', amount: 320.00, currency: 'USD', status: 'APPROVED', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-07-01 09:00:00', updatedAt: '2026-07-03 15:00:00' },
-    { id: 'DSP005', transactionId: 'TXN005', userId: 'CLIENT001', reason: 'INCORRECT_AMOUNT', description: 'Le montant débité (89.99) ne correspond pas au prix affiché (49.99).', amount: 89.99, currency: 'USD', status: 'REJECTED', priority: 'LOW', assignedTo: 'OPERATOR001', createdAt: '2026-06-28 11:00:00', updatedAt: '2026-06-30 16:00:00' },
-    { id: 'DSP006', transactionId: 'TXN003', userId: 'CLIENT002', reason: 'CANCELLED_RECURRING_PAYMENT', description: 'Abonnement résilié mais les prélèvements continuent.', amount: 67.50, currency: 'USD', status: 'CHARGEBACK_INITIATED', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-06-20 08:00:00', updatedAt: '2026-06-23 09:00:00' },
-    { id: 'DSP007', transactionId: 'TXN001', userId: 'CLIENT001', reason: 'FRAUD', description: 'Transaction frauduleuse détectée sur mon compte.', amount: 250.75, currency: 'USD', status: 'MERCHANT_RESPONSE_RECEIVED', priority: 'URGENT', assignedTo: 'OPERATOR001', createdAt: '2026-06-15 09:00:00', updatedAt: '2026-06-19 16:00:00' },
-    { id: 'DSP008', transactionId: 'TXN004', userId: 'CLIENT002', reason: 'ATM_CASH_NOT_DISPENSED', description: 'Le distributeur n\'a pas remis les billets mais le compte a été débité.', amount: 320.00, currency: 'USD', status: 'REFUND_COMPLETED', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-06-10 08:00:00', updatedAt: '2026-06-15 15:00:00' },
-    { id: 'DSP009', transactionId: 'TXN002', userId: 'CLIENT001', reason: 'OTHER', description: 'Je conteste cette transaction pour motif divers non listé.', amount: 14.99, currency: 'USD', status: 'CLOSED', priority: 'LOW', assignedTo: 'OPERATOR001', createdAt: '2026-06-05 09:00:00', updatedAt: '2026-06-08 09:00:00' },
-    { id: 'DSP010', transactionId: 'TXN005', userId: 'CLIENT002', reason: 'UNAUTHORIZED_TRANSACTION', description: 'Transaction non autorisée détectée après vérification du relevé.', amount: 89.99, currency: 'USD', status: 'CLOSED', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-06-01 08:00:00', updatedAt: '2026-06-07 09:00:00' },
+     { id: 'DSP001', transactionId: 'TXN001', userId: 'CLIENT001', reason: 'UNAUTHORIZED_TRANSACTION', description: 'Transaction que je n\'ai pas autorisée sur mon compte.', amount: 250.75, currency: 'USD', status: 'SOUMIS', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-07-10 10:00:00', updatedAt: '2026-07-10 10:00:00' },
+    { id: 'DSP002', transactionId: 'TXN003', userId: 'CLIENT002', reason: 'DOUBLE_CHARGE', description: 'J\'ai été facturé deux fois pour la même commande Uber Eats.', amount: 67.50, currency: 'USD', status: 'EN_COURS_D_ANALYSE', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-07-08 09:00:00', updatedAt: '2026-07-09 11:00:00' },
+    { id: 'DSP003', transactionId: 'TXN002', userId: 'CLIENT001', reason: 'GOODS_NOT_RECEIVED', description: 'Les marchandises commandées n\'ont jamais été livrées.', amount: 14.99, currency: 'USD', status: 'EN_ATTENTE_D_INFORMATIONS', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-07-05 08:30:00', updatedAt: '2026-07-07 10:00:00' },
+    { id: 'DSP004', transactionId: 'TXN004', userId: 'CLIENT002', reason: 'SERVICE_NOT_PROVIDED', description: 'Le service réservé sur Booking.com n\'a pas été rendu.', amount: 320.00, currency: 'USD', status: 'APPROUVE', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-07-01 09:00:00', updatedAt: '2026-07-03 15:00:00' },
+    { id: 'DSP005', transactionId: 'TXN005', userId: 'CLIENT001', reason: 'INCORRECT_AMOUNT', description: 'Le montant débité (89.99) ne correspond pas au prix affiché (49.99).', amount: 89.99, currency: 'USD', status: 'REJETE', priority: 'LOW', assignedTo: 'OPERATOR001', createdAt: '2026-06-28 11:00:00', updatedAt: '2026-06-30 16:00:00' },
+    { id: 'DSP006', transactionId: 'TXN003', userId: 'CLIENT002', reason: 'CANCELLED_RECURRING_PAYMENT', description: 'Abonnement résilié mais les prélèvements continuent.', amount: 67.50, currency: 'USD', status: 'CHARGEBACK_INITIE', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-06-20 08:00:00', updatedAt: '2026-06-23 09:00:00' },
+    { id: 'DSP007', transactionId: 'TXN001', userId: 'CLIENT001', reason: 'FRAUD', description: 'Transaction frauduleuse détectée sur mon compte.', amount: 250.75, currency: 'USD', status: 'CHARGEBACK_INITIE', priority: 'URGENT', assignedTo: 'OPERATOR001', createdAt: '2026-06-15 09:00:00', updatedAt: '2026-06-18 10:00:00' },
+    { id: 'DSP008', transactionId: 'TXN004', userId: 'CLIENT002', reason: 'ATM_CASH_NOT_DISPENSED', description: 'Le distributeur n\'a pas remis les billets mais le compte a été débité.', amount: 320.00, currency: 'USD', status: 'REMBOURSEMENT_EFFECTUE', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-06-10 08:00:00', updatedAt: '2026-06-15 15:00:00' },
+    { id: 'DSP009', transactionId: 'TXN002', userId: 'CLIENT001', reason: 'OTHER', description: 'Je conteste cette transaction pour motif divers non listé.', amount: 14.99, currency: 'USD', status: 'CLOTURE', priority: 'LOW', assignedTo: 'OPERATOR001', createdAt: '2026-06-05 09:00:00', updatedAt: '2026-06-08 09:00:00' },
+    { id: 'DSP010', transactionId: 'TXN005', userId: 'CLIENT002', reason: 'UNAUTHORIZED_TRANSACTION', description: 'Transaction non autorisée détectée après vérification du relevé.', amount: 89.99, currency: 'USD', status: 'CLOTURE', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-06-01 08:00:00', updatedAt: '2026-06-07 09:00:00' },
   ];
 
   for (const d of disputes) {
     await run(
-      `INSERT INTO disputes (id, transactionId, userId, reason, description, amount, currency, status, priority, assignedTo, createdAt, updatedAt)
+      `INSERT INTO disputes (id, transaction_id, client_id, reason, description, amount, currency, status, priority, assigned_to, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [d.id, d.transactionId, d.userId, d.reason, d.description, d.amount, d.currency, d.status, d.priority, d.assignedTo, d.createdAt, d.updatedAt]
     );
@@ -187,73 +187,70 @@ async function seedDisputes() {
 }
 
 // ─── Seed : historique des statuts ──────────────────────────────────────────
-// Pour chaque litige, on génère TOUT l'historique cohérent depuis SUBMITTED
+// Pour chaque litige, on génère TOUT l'historique cohérent depuis SOUMIS
 // jusqu'au statut final, avec fromStatus, toStatus, changedBy, date, reason.
 async function seedStatusHistory() {
   console.log('Insertion de l\'historique des statuts...');
   const entries = [
-    // ── DSP001 : SUBMITTED ──────────────────────────────────────────────
-    { id: 'HIST001', disputeId: 'DSP001', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-10 10:00:00' },
+    // ── DSP001 : SOUMIS ──────────────────────────────────────────────
+    { id: 'HIST001', disputeId: 'DSP001', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-10 10:00:00' },
 
-    // ── DSP002 : SUBMITTED → UNDER_REVIEW ───────────────────────────────
-    { id: 'HIST002', disputeId: 'DSP002', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-08 09:00:00' },
-    { id: 'HIST003', disputeId: 'DSP002', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Litige pris en charge par l\'opérateur',                    createdAt: '2026-07-09 11:00:00' },
+    // ── DSP002 : SOUMIS → EN_COURS_D_ANALYSE ─────────────────────────
+    { id: 'HIST002', disputeId: 'DSP002', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-08 09:00:00' },
+    { id: 'HIST003', disputeId: 'DSP002', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Litige pris en charge par l\'opérateur',                    createdAt: '2026-07-09 11:00:00' },
 
-    // ── DSP003 : SUBMITTED → UNDER_REVIEW → WAITING_FOR_INFORMATION ────
-    { id: 'HIST004', disputeId: 'DSP003', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-05 08:30:00' },
-    { id: 'HIST005', disputeId: 'DSP003', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Analyse du litige en cours',                                 createdAt: '2026-07-06 14:00:00' },
-    { id: 'HIST006', disputeId: 'DSP003', fromStatus: 'UNDER_REVIEW', toStatus: 'WAITING_FOR_INFORMATION', changedBy: 'OPERATOR001', reason: 'Documents complémentaires demandés au client',        createdAt: '2026-07-07 10:00:00' },
+    // ── DSP003 : SOUMIS → EN_COURS_D_ANALYSE → EN_ATTENTE_D_INFORMATIONS ────
+    { id: 'HIST004', disputeId: 'DSP003', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-05 08:30:00' },
+    { id: 'HIST005', disputeId: 'DSP003', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Analyse du litige en cours',                                 createdAt: '2026-07-06 14:00:00' },
+    { id: 'HIST006', disputeId: 'DSP003', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'EN_ATTENTE_D_INFORMATIONS', changedBy: 'OPERATOR001', reason: 'Documents complémentaires demandés au client',        createdAt: '2026-07-07 10:00:00' },
 
-    // ── DSP004 : SUBMITTED → UNDER_REVIEW → APPROVED ────────────────────
-    { id: 'HIST007', disputeId: 'DSP004', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-01 09:00:00' },
-    { id: 'HIST008', disputeId: 'DSP004', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Examen du dossier en cours',                                 createdAt: '2026-07-02 10:00:00' },
-    { id: 'HIST009', disputeId: 'DSP004', fromStatus: 'UNDER_REVIEW', toStatus: 'APPROVED',   changedBy: 'OPERATOR001', reason: 'Litige validé, preuves suffisantes',                          createdAt: '2026-07-03 15:00:00' },
+    // ── DSP004 : SOUMIS → EN_COURS_D_ANALYSE → APPROUVE ──────────────
+    { id: 'HIST007', disputeId: 'DSP004', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-07-01 09:00:00' },
+    { id: 'HIST008', disputeId: 'DSP004', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Examen du dossier en cours',                                 createdAt: '2026-07-02 10:00:00' },
+    { id: 'HIST009', disputeId: 'DSP004', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'APPROUVE',   changedBy: 'OPERATOR001', reason: 'Litige validé, preuves suffisantes',                          createdAt: '2026-07-03 15:00:00' },
 
-    // ── DSP005 : SUBMITTED → UNDER_REVIEW → REJECTED ────────────────────
-    { id: 'HIST010', disputeId: 'DSP005', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-28 11:00:00' },
-    { id: 'HIST011', disputeId: 'DSP005', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Vérification du montant avec le marchand',                  createdAt: '2026-06-29 09:30:00' },
-    { id: 'HIST012', disputeId: 'DSP005', fromStatus: 'UNDER_REVIEW', toStatus: 'REJECTED',   changedBy: 'OPERATOR001', reason: 'Preuves insuffisantes, montant conforme au prix affiché',    createdAt: '2026-06-30 16:00:00' },
+    // ── DSP005 : SOUMIS → EN_COURS_D_ANALYSE → REJETE ────────────────
+    { id: 'HIST010', disputeId: 'DSP005', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-28 11:00:00' },
+    { id: 'HIST011', disputeId: 'DSP005', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Vérification du montant avec le marchand',                  createdAt: '2026-06-29 09:30:00' },
+    { id: 'HIST012', disputeId: 'DSP005', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'REJETE',   changedBy: 'OPERATOR001', reason: 'Preuves insuffisantes, montant conforme au prix affiché',    createdAt: '2026-06-30 16:00:00' },
 
-    // ── DSP006 : SUBMITTED → UNDER_REVIEW → APPROVED → CHARGEBACK_INITIATED ─
-    { id: 'HIST013', disputeId: 'DSP006', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-20 08:00:00' },
-    { id: 'HIST014', disputeId: 'DSP006', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Analyse approfondie de la demande',                          createdAt: '2026-06-21 10:00:00' },
-    { id: 'HIST015', disputeId: 'DSP006', fromStatus: 'UNDER_REVIEW', toStatus: 'APPROVED',   changedBy: 'OPERATOR001', reason: 'Litige fondé, résiliation confirmée',                        createdAt: '2026-06-22 14:00:00' },
-    { id: 'HIST016', disputeId: 'DSP006', fromStatus: 'APPROVED',     toStatus: 'CHARGEBACK_INITIATED', changedBy: 'OPERATOR001', reason: 'Procédure de chargeback lancée auprès de l\'émetteur', createdAt: '2026-06-23 09:00:00' },
+    // ── DSP006 : SOUMIS → EN_COURS_D_ANALYSE → APPROUVE → CHARGEBACK_INITIE ─
+    { id: 'HIST013', disputeId: 'DSP006', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-20 08:00:00' },
+    { id: 'HIST014', disputeId: 'DSP006', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Analyse approfondie de la demande',                          createdAt: '2026-06-21 10:00:00' },
+    { id: 'HIST015', disputeId: 'DSP006', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'APPROUVE',   changedBy: 'OPERATOR001', reason: 'Litige fondé, résiliation confirmée',                        createdAt: '2026-06-22 14:00:00' },
+    { id: 'HIST016', disputeId: 'DSP006', fromStatus: 'APPROUVE',     toStatus: 'CHARGEBACK_INITIE', changedBy: 'OPERATOR001', reason: 'Procédure de chargeback lancée auprès de l\'émetteur', createdAt: '2026-06-23 09:00:00' },
 
-    // ── DSP007 : SUBMITTED → UNDER_REVIEW → APPROVED → CHARGEBACK_INITIATED → MERCHANT_RESPONSE_RECEIVED ──
-    { id: 'HIST017', disputeId: 'DSP007', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-15 09:00:00' },
-    { id: 'HIST018', disputeId: 'DSP007', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Enquête de fraude en cours',                                 createdAt: '2026-06-16 11:00:00' },
-    { id: 'HIST019', disputeId: 'DSP007', fromStatus: 'UNDER_REVIEW', toStatus: 'APPROVED',   changedBy: 'OPERATOR001', reason: 'Fraude confirmée, litige approuvé',                          createdAt: '2026-06-17 14:00:00' },
-    { id: 'HIST020', disputeId: 'DSP007', fromStatus: 'APPROVED',     toStatus: 'CHARGEBACK_INITIATED', changedBy: 'OPERATOR001', reason: 'Chargeback initié auprès de l\'organisme émetteur',  createdAt: '2026-06-18 10:00:00' },
-    { id: 'HIST021', disputeId: 'DSP007', fromStatus: 'CHARGEBACK_INITIATED', toStatus: 'MERCHANT_RESPONSE_RECEIVED', changedBy: 'OPERATOR001', reason: 'Réponse du marchand reçue, analyse en cours', createdAt: '2026-06-19 16:00:00' },
+    // ── DSP007 : SOUMIS → EN_COURS_D_ANALYSE → APPROUVE → CHARGEBACK_INITIE ──
+    { id: 'HIST017', disputeId: 'DSP007', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-15 09:00:00' },
+    { id: 'HIST018', disputeId: 'DSP007', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Enquête de fraude en cours',                                 createdAt: '2026-06-16 11:00:00' },
+    { id: 'HIST019', disputeId: 'DSP007', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'APPROUVE',   changedBy: 'OPERATOR001', reason: 'Fraude confirmée, litige approuvé',                          createdAt: '2026-06-17 14:00:00' },
+    { id: 'HIST020', disputeId: 'DSP007', fromStatus: 'APPROUVE',     toStatus: 'CHARGEBACK_INITIE', changedBy: 'OPERATOR001', reason: 'Chargeback initié auprès de l\'organisme émetteur',  createdAt: '2026-06-18 10:00:00' },
 
-    // ── DSP008 : SUBMITTED → ... → REFUND_COMPLETED ─────────────────────
-    { id: 'HIST022', disputeId: 'DSP008', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-10 08:00:00' },
-    { id: 'HIST023', disputeId: 'DSP008', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Analyse du litige ATM en cours',                              createdAt: '2026-06-11 10:00:00' },
-    { id: 'HIST024', disputeId: 'DSP008', fromStatus: 'UNDER_REVIEW', toStatus: 'APPROVED',   changedBy: 'OPERATOR001', reason: 'Litige justifié, preuves concordantes',                      createdAt: '2026-06-12 13:00:00' },
-    { id: 'HIST025', disputeId: 'DSP008', fromStatus: 'APPROVED',     toStatus: 'CHARGEBACK_INITIATED', changedBy: 'OPERATOR001', reason: 'Chargeback lancé pour transaction ATM',              createdAt: '2026-06-13 09:00:00' },
-    { id: 'HIST026', disputeId: 'DSP008', fromStatus: 'CHARGEBACK_INITIATED', toStatus: 'MERCHANT_RESPONSE_RECEIVED', changedBy: 'OPERATOR001', reason: 'Réponse du marchand traitée',       createdAt: '2026-06-14 11:00:00' },
-    { id: 'HIST027', disputeId: 'DSP008', fromStatus: 'MERCHANT_RESPONSE_RECEIVED', toStatus: 'REFUND_COMPLETED', changedBy: 'OPERATOR001', reason: 'Remboursement effectué sur le compte du client', createdAt: '2026-06-15 15:00:00' },
+    // ── DSP008 : SOUMIS → ... → REMBOURSEMENT_EFFECTUE ───────────────
+    { id: 'HIST021', disputeId: 'DSP008', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-10 08:00:00' },
+    { id: 'HIST022', disputeId: 'DSP008', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Analyse du litige ATM en cours',                              createdAt: '2026-06-11 10:00:00' },
+    { id: 'HIST023', disputeId: 'DSP008', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'APPROUVE',   changedBy: 'OPERATOR001', reason: 'Litige justifié, preuves concordantes',                      createdAt: '2026-06-12 13:00:00' },
+    { id: 'HIST024', disputeId: 'DSP008', fromStatus: 'APPROUVE',     toStatus: 'CHARGEBACK_INITIE', changedBy: 'OPERATOR001', reason: 'Chargeback lancé pour transaction ATM',              createdAt: '2026-06-13 09:00:00' },
+    { id: 'HIST025', disputeId: 'DSP008', fromStatus: 'CHARGEBACK_INITIE', toStatus: 'REMBOURSEMENT_EFFECTUE', changedBy: 'OPERATOR001', reason: 'Remboursement effectué sur le compte du client', createdAt: '2026-06-15 15:00:00' },
 
-    // ── DSP009 : SUBMITTED → UNDER_REVIEW → REJECTED → CLOSED (issu d'un rejet) ──
-    { id: 'HIST028', disputeId: 'DSP009', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-05 09:00:00' },
-    { id: 'HIST029', disputeId: 'DSP009', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Examen du dossier',                                          createdAt: '2026-06-06 10:00:00' },
-    { id: 'HIST030', disputeId: 'DSP009', fromStatus: 'UNDER_REVIEW', toStatus: 'REJECTED',   changedBy: 'OPERATOR001', reason: 'Motif non justifié, preuves insuffisantes',                   createdAt: '2026-06-07 14:00:00' },
-    { id: 'HIST031', disputeId: 'DSP009', fromStatus: 'REJECTED',     toStatus: 'CLOSED',     changedBy: 'OPERATOR001', reason: 'Litige clôturé après notification du rejet au client',       createdAt: '2026-06-08 09:00:00' },
+    // ── DSP009 : SOUMIS → EN_COURS_D_ANALYSE → REJETE → CLOTURE (issu d'un rejet) ──
+    { id: 'HIST026', disputeId: 'DSP009', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-05 09:00:00' },
+    { id: 'HIST027', disputeId: 'DSP009', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Examen du dossier',                                          createdAt: '2026-06-06 10:00:00' },
+    { id: 'HIST028', disputeId: 'DSP009', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'REJETE',   changedBy: 'OPERATOR001', reason: 'Motif non justifié, preuves insuffisantes',                   createdAt: '2026-06-07 14:00:00' },
+    { id: 'HIST029', disputeId: 'DSP009', fromStatus: 'REJETE',     toStatus: 'CLOTURE',     changedBy: 'OPERATOR001', reason: 'Litige clôturé après notification du rejet au client',       createdAt: '2026-06-08 09:00:00' },
 
-    // ── DSP010 : SUBMITTED → ... → REFUND_COMPLETED → CLOSED (issu d'un remboursement) ──
-    { id: 'HIST032', disputeId: 'DSP010', fromStatus: null,           toStatus: 'SUBMITTED',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-01 08:00:00' },
-    { id: 'HIST033', disputeId: 'DSP010', fromStatus: 'SUBMITTED',    toStatus: 'UNDER_REVIEW', changedBy: 'OPERATOR001', reason: 'Analyse du litige',                                           createdAt: '2026-06-02 10:00:00' },
-    { id: 'HIST034', disputeId: 'DSP010', fromStatus: 'UNDER_REVIEW', toStatus: 'APPROVED',   changedBy: 'OPERATOR001', reason: 'Litige approuvé, transaction frauduleuse confirmée',          createdAt: '2026-06-03 14:00:00' },
-    { id: 'HIST035', disputeId: 'DSP010', fromStatus: 'APPROVED',     toStatus: 'CHARGEBACK_INITIATED', changedBy: 'OPERATOR001', reason: 'Chargeback en cours de traitement',                   createdAt: '2026-06-04 09:00:00' },
-    { id: 'HIST036', disputeId: 'DSP010', fromStatus: 'CHARGEBACK_INITIATED', toStatus: 'MERCHANT_RESPONSE_RECEIVED', changedBy: 'OPERATOR001', reason: 'Réponse du marchand reçue, pas d\'objection',  createdAt: '2026-06-05 11:00:00' },
-    { id: 'HIST037', disputeId: 'DSP010', fromStatus: 'MERCHANT_RESPONSE_RECEIVED', toStatus: 'REFUND_COMPLETED', changedBy: 'OPERATOR001', reason: 'Remboursement validé',                       createdAt: '2026-06-06 15:00:00' },
-    { id: 'HIST038', disputeId: 'DSP010', fromStatus: 'REFUND_COMPLETED', toStatus: 'CLOSED', changedBy: 'OPERATOR001', reason: 'Litige clôturé avec succès',                          createdAt: '2026-06-07 09:00:00' },
+    // ── DSP010 : SOUMIS → ... → REMBOURSEMENT_EFFECTUE → CLOTURE (issu d'un remboursement) ──
+    { id: 'HIST030', disputeId: 'DSP010', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT002',  reason: 'Client a soumis le litige',                                  createdAt: '2026-06-01 08:00:00' },
+    { id: 'HIST031', disputeId: 'DSP010', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Analyse du litige',                                           createdAt: '2026-06-02 10:00:00' },
+    { id: 'HIST032', disputeId: 'DSP010', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'APPROUVE',   changedBy: 'OPERATOR001', reason: 'Litige approuvé, transaction frauduleuse confirmée',          createdAt: '2026-06-03 14:00:00' },
+    { id: 'HIST033', disputeId: 'DSP010', fromStatus: 'APPROUVE',     toStatus: 'CHARGEBACK_INITIE', changedBy: 'OPERATOR001', reason: 'Chargeback en cours de traitement',                   createdAt: '2026-06-04 09:00:00' },
+    { id: 'HIST034', disputeId: 'DSP010', fromStatus: 'CHARGEBACK_INITIE', toStatus: 'REMBOURSEMENT_EFFECTUE', changedBy: 'OPERATOR001', reason: 'Remboursement validé',                       createdAt: '2026-06-06 15:00:00' },
+    { id: 'HIST035', disputeId: 'DSP010', fromStatus: 'REMBOURSEMENT_EFFECTUE', toStatus: 'CLOTURE', changedBy: 'OPERATOR001', reason: 'Litige clôturé avec succès',                          createdAt: '2026-06-07 09:00:00' },
   ];
 
   for (const h of entries) {
     await run(
-      `INSERT INTO dispute_status_history (id, disputeId, fromStatus, toStatus, changedBy, reason, createdAt)
+      `INSERT INTO dispute_status_history (id, dispute_id, old_status, new_status, changed_by, reason, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [h.id, h.disputeId, h.fromStatus, h.toStatus, h.changedBy, h.reason, h.createdAt]
     );
@@ -327,7 +324,7 @@ async function seedComments() {
 
   for (const c of comments) {
     await run(
-      `INSERT INTO dispute_comments (id, disputeId, userId, comment, createdAt)
+      `INSERT INTO dispute_comments (id, dispute_id, client_id, comment, created_at)
        VALUES (?, ?, ?, ?, ?)`,
       [c.id, c.disputeId, c.userId, c.comment, c.createdAt]
     );
@@ -349,7 +346,7 @@ async function seedDocuments() {
 
   for (const d of docs) {
     await run(
-      `INSERT INTO dispute_documents (id, disputeId, userId, fileName, fileType, filePath, fileSize, fileContent, uploadedAt)
+      `INSERT INTO dispute_documents (id, dispute_id, client_id, file_name, file_type, file_path, file_size, file_content, uploaded_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [d.id, d.disputeId, d.userId, d.fileName, d.fileType, d.filePath, d.fileSize, d.fileContent || null, d.uploadedAt]
     );

@@ -25,7 +25,7 @@ function dbRun(sql, params) {
 // Retourne une promesse résolue avec le résultat de l'insertion.
 async function recordStatusChange(disputeId, fromStatus, toStatus, changedBy, comment) {
   return dbRun(
-    `INSERT INTO dispute_status_history (id, disputeId, fromStatus, toStatus, changedBy, reason)
+    `INSERT INTO dispute_status_history (id, dispute_id, old_status, new_status, changed_by, reason)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [randomUUID(), disputeId, fromStatus, toStatus, changedBy, comment]
   );
@@ -38,7 +38,7 @@ async function recordStatusChange(disputeId, fromStatus, toStatus, changedBy, co
 // Retourne une promesse résolue avec le résultat de l'insertion.
 async function recordComment(disputeId, userId, comment) {
   return dbRun(
-    `INSERT INTO dispute_comments (id, disputeId, userId, comment)
+    `INSERT INTO dispute_comments (id, dispute_id, client_id, comment)
      VALUES (?, ?, ?, ?)`,
     [randomUUID(), disputeId, userId, comment]
   );

@@ -11,7 +11,7 @@ function findByEmail(email) {
 
 function findById(id) {
   return new Promise((resolve, reject) => {
-    db.get('SELECT id, name, email, role FROM users WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT id, nom, email, role FROM users WHERE id = ?', [id], (err, row) => {
       if (err) return reject(err);
       resolve(row);
     });
@@ -21,7 +21,7 @@ function findById(id) {
 function updateProfile(id, { name, email }) {
   return new Promise((resolve, reject) => {
     db.run(
-      'UPDATE users SET name = ?, email = ? WHERE id = ?',
+      'UPDATE users SET nom = ?, email = ? WHERE id = ?',
       [name, email, id],
       function (err) {
         if (err) return reject(err);
