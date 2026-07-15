@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { createDispute, getDisputes, getDisputeById, review, requestInfo, approve, reject, chargeback, refund, close, respondToInfoRequest,
+const { createDispute, getDisputes, getDisputeById, respondToInfoRequest,
   getDisputeHistory, getDisputeComments, getDisputeDocuments, uploadDisputeDocument, getDocumentContent } = require('../controllers/disputeController');
+const { review, requestInfo, approve, reject, chargeback, refund, close } = require('../controllers/operatorController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.post('/disputes', authenticate, authorize('CLIENT'), createDispute);
