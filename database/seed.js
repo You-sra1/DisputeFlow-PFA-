@@ -1,7 +1,6 @@
 // Script d'initialisation (seed) de la base de données SQLite.
 // Insère des données de démonstration cohérentes pour le développement.
 // Exécution : node database/seed.js (depuis la racine du projet)
-//             (doit être lancé APRÈS database/migrate.js)
 //
 // Le script est idempotent : il supprime toutes les données existantes
 // avant de réinsérer, pour garantir un état propre et reproductible.

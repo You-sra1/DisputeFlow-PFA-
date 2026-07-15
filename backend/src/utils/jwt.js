@@ -1,23 +1,23 @@
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not defined in environment. Server cannot start.');
-  process.exit(1);
+function getSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not defined in environment');
+  }
+  return secret;
 }
 
-// Génère un token JWT à partir des informations utilisateur.
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
+    getSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
   );
 }
 
-// Vérifie la validité d'un token JWT et retourne son contenu décodé.
 function verifyToken(token) {
-  return jwt.verify(token, process.env.JWT_SECRET);
+  return jwt.verify(token, getSecret());
 }
 
 module.exports = { generateToken, verifyToken };

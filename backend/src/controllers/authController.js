@@ -1,47 +1,11 @@
-const bcrypt = require('bcryptjs');
 const userModel = require('../models/usermodel');
 const { generateToken } = require('../utils/jwt');
+const { hashPassword, comparePassword } = require('../utils/bcryptHelper');
 const { successResponse, errorResponse } = require('../utils/responseBuilder');
+const AppError = require('../utils/AppError');
 
-// Nombre de tours de hachage pour bcrypt : plus il est élevé, plus le hash est sécurisé.
-const SALT_ROUNDS = 12;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Vérifie si un mot de passe stocké est déjà un hash bcrypt.
-function isBcryptHash(password) {
-  return typeof password === 'string' && password.startsWith('$2');
-}
-
-// Vérifie un mot de passe en clair contre la valeur stockée en base.
-// Supporte à la fois les anciens mots de passe en clair et les hashes bcrypt.
-async function verifyPassword(plainPassword, storedPassword) {
-  if (!storedPassword) {
-    return false;
-  }
-
-  if (isBcryptHash(storedPassword)) {
-    try {
-      return await bcrypt.compare(plainPassword, storedPassword);
-    } catch {
-      return false;
-    }
-  }
-
-  return plainPassword === storedPassword;
-}
-
-// Si un utilisateur a encore un mot de passe non hashé, on le migre vers bcrypt.
-async function migratePasswordToHash(user, plainPassword) {
-  if (!user || !plainPassword || isBcryptHash(user.password)) {
-    return;
-  }
-
-  const hashedPassword = await bcrypt.hash(plainPassword, SALT_ROUNDS);
-  await userModel.updatePassword(user.id, hashedPassword);
-}
-
-// Contrôleur de connexion : vérifie les identifiants et retourne un token JWT si tout est correct.
-// Cette fonction reçoit le corps de la requête, lit l'email et le mot de passe,
-// contrôle les informations en base, puis renvoie un token et les infos utilisateur.
 async function login(req, res) {
   try {
     const { requestInfo, email, password } = req.body;
@@ -49,6 +13,12 @@ async function login(req, res) {
     if (!email || !password) {
       return res.status(400).json(
         errorResponse('Email and password are required', { errorCode: '40070' })
+      );
+    }
+
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json(
+        errorResponse('Invalid email format', { errorCode: '40071' })
       );
     }
 
@@ -60,15 +30,11 @@ async function login(req, res) {
       );
     }
 
-    const passwordValide = await verifyPassword(password, user.password);
+    const passwordValide = await comparePassword(password, user.password);
     if (!passwordValide) {
       return res.status(401).json(
         errorResponse('Invalid email or password', { errorCode: '40101' })
       );
-    }
-
-    if (!isBcryptHash(user.password)) {
-      await migratePasswordToHash(user, password);
     }
 
     const token = generateToken({ id: user.id, email: user.email, role: user.role });
@@ -85,15 +51,13 @@ async function login(req, res) {
       })
     );
   } catch (err) {
-    console.error('Erreur login :', err.stack || err);
+    console.error('Erreur login :', err.message);
     return res.status(500).json(
       errorResponse('Internal server error', { errorCode: '50000' })
     );
   }
 }
 
-// Retourne les informations de l'utilisateur connecté à partir du token JWT.
-// Cette route est protégée et ne doit être accessible qu'avec un token valide.
 async function me(req, res) {
   try {
     if (!req.user || !req.user.id) {
@@ -111,11 +75,93 @@ async function me(req, res) {
 
     return res.status(200).json(successResponse(user));
   } catch (err) {
-    console.error('Erreur /me :', err);
+    console.error('Erreur /me :', err.message);
     return res.status(500).json(
       errorResponse('Internal server error', { errorCode: '50000' })
     );
   }
 }
 
-module.exports = { login, me };
+async function updateMe(req, res) {
+  try {
+    const userId = req.user.id;
+    const { name, email } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      throw new AppError('Name is required', 400, '40072');
+    }
+    if (!email || typeof email !== 'string' || !EMAIL_REGEX.test(email)) {
+      throw new AppError('Valid email is required', 400, '40073');
+    }
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    const existing = await userModel.findByEmail(trimmedEmail);
+    if (existing && existing.id !== userId) {
+      throw new AppError('Email already in use by another account', 409, '40920');
+    }
+
+    await userModel.updateProfile(userId, { name: trimmedName, email: trimmedEmail });
+
+    const updatedUser = await userModel.findById(userId);
+
+    return res.status(200).json(successResponse(updatedUser));
+  } catch (err) {
+    if (err instanceof AppError) {
+      return res.status(err.statusCode).json(
+        errorResponse(err.message, { errorCode: err.errorCode })
+      );
+    }
+    console.error('Erreur updateMe :', err.message);
+    return res.status(500).json(
+      errorResponse('Internal server error', { errorCode: '50000' })
+    );
+  }
+}
+
+async function changePassword(req, res) {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || typeof currentPassword !== 'string') {
+      throw new AppError('Current password is required', 400, '40074');
+    }
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+      throw new AppError('New password must be at least 6 characters', 400, '40075');
+    }
+
+    const user = await userModel.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404, '40401');
+    }
+
+    const fullUser = await userModel.findByEmail(user.email);
+    if (!fullUser) {
+      throw new AppError('User not found', 404, '40401');
+    }
+
+    const valid = await comparePassword(currentPassword, fullUser.password);
+    if (!valid) {
+      throw new AppError('Current password is incorrect', 401, '40102');
+    }
+
+    const hash = await hashPassword(newPassword);
+    await userModel.updatePassword(userId, hash);
+
+    return res.status(200).json(successResponse({ message: 'Password updated successfully' }));
+  } catch (err) {
+    if (err instanceof AppError) {
+      return res.status(err.statusCode).json(
+        errorResponse(err.message, { errorCode: err.errorCode })
+      );
+    }
+    console.error('Erreur changePassword :', err.message);
+    return res.status(500).json(
+      errorResponse('Internal server error', { errorCode: '50000' })
+    );
+  }
+}
+
+module.exports = { login, me, updateMe, changePassword };

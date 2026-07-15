@@ -14,11 +14,14 @@ const { recordStatusChange, recordComment } = require('./disputeHistoryService')
 // Utilise COUNT(*) pour éviter les races conditions avec MAX(rowid).
 function generateDisputeId() {
   return new Promise((resolve, reject) => {
-    db.get(`SELECT COUNT(*) AS count FROM disputes`, [], (err, row) => {
-      if (err) return reject(new AppError('Internal server error', 500, '50000'));
-      const nextNum = (row ? row.count : 0) + 1;
-      resolve(`DSP${String(nextNum).padStart(3, '0')}`);
-    });
+    db.get(
+      `SELECT COALESCE(MAX(CAST(SUBSTR(id, 4) AS INTEGER)), 0) + 1 AS nextNum FROM disputes`,
+      [],
+      (err, row) => {
+        if (err) return reject(new AppError('Internal server error', 500, '50000'));
+        resolve(`DSP${String(row.nextNum).padStart(3, '0')}`);
+      }
+    );
   });
 }
 
@@ -217,16 +220,8 @@ async function reviewDispute(disputeId, operatorId, comment) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Vérifier que le litige est au statut SUBMITTED ──
-  // La prise en charge n'est possible que depuis SUBMITTED (première transition opérateur)
-  if (dispute.status !== 'SUBMITTED') {
-    // → errorCode 40906 : conflit car le litige a déjà été pris en charge ou est clôturé
-    throw new AppError(
-      `Invalid status transition: dispute must be SUBMITTED, current status is ${dispute.status}`,
-      409,
-      '40906'
-    );
-  }
+  // ── 2. Valider la transition SUBMITTED → UNDER_REVIEW ──
+  validateTransition(dispute.status, 'UNDER_REVIEW');
 
   // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
@@ -303,16 +298,8 @@ async function requestInfo(disputeId, operatorId, message) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Vérifier que le litige est au statut UNDER_REVIEW ──
-  // La demande d'infos complémentaires n'est possible que depuis UNDER_REVIEW
-  if (dispute.status !== 'UNDER_REVIEW') {
-    // → errorCode 40907 : conflit car le litige n'est pas en cours d'analyse
-    throw new AppError(
-      `Invalid status transition: dispute must be UNDER_REVIEW, current status is ${dispute.status}`,
-      409,
-      '40907'
-    );
-  }
+  // ── 2. Valider la transition UNDER_REVIEW → WAITING_FOR_INFORMATION ──
+  validateTransition(dispute.status, 'WAITING_FOR_INFORMATION');
 
   // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
@@ -388,21 +375,10 @@ async function approveDispute(disputeId, operatorId, comment) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Vérifier que le litige est à un statut permettant l'approbation ──
-  // L'approbation n'est possible que depuis UNDER_REVIEW ou WAITING_FOR_INFORMATION
-  if (dispute.status !== 'UNDER_REVIEW' && dispute.status !== 'WAITING_FOR_INFORMATION') {
-    // → errorCode 40902 : conflit car le litige n'est pas dans un statut permettant l'approbation
-    throw new AppError(
-      `Invalid status transition: dispute must be UNDER_REVIEW or WAITING_FOR_INFORMATION, current status is ${dispute.status}`,
-      409,
-      '40902'
-    );
-  }
-
-  // ── 3. Valider la transition via le validateur générique ──
+  // ── 2. Valider la transition vers APPROVED ──
   validateTransition(dispute.status, 'APPROVED');
 
-  // ── 4. Exécuter la transaction atomique ──
+  // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
 
   return new Promise((resolve, reject) => {
@@ -478,21 +454,10 @@ async function rejectDispute(disputeId, operatorId, reason, comment) {
     throw new AppError('Dispute not found', 404, '40402');
   }
 
-  // ── 2. Vérifier que le litige est à un statut permettant le rejet ──
-  // Le rejet n'est possible que depuis UNDER_REVIEW ou WAITING_FOR_INFORMATION
-  if (dispute.status !== 'UNDER_REVIEW' && dispute.status !== 'WAITING_FOR_INFORMATION') {
-    // → errorCode 40902 : conflit car le litige n'est pas dans un statut permettant le rejet
-    throw new AppError(
-      `Invalid status transition: dispute must be UNDER_REVIEW or WAITING_FOR_INFORMATION, current status is ${dispute.status}`,
-      409,
-      '40902'
-    );
-  }
-
-  // ── 3. Valider la transition via le validateur générique ──
+  // ── 2. Valider la transition vers REJECTED ──
   validateTransition(dispute.status, 'REJECTED');
 
-  // ── 4. Exécuter la transaction atomique ──
+  // ── 3. Exécuter la transaction atomique ──
   const now = new Date().toISOString();
 
   // Concaténation du motif et du commentaire pour l'historique
@@ -588,9 +553,7 @@ async function chargebackDispute(disputeId, operatorId, chargebackReasonCode, ne
   const currentStatus = dispute.status;
   const newStatus = 'CHARGEBACK_INITIATED';
 
-  if (!VALID_TRANSITIONS[currentStatus] || !VALID_TRANSITIONS[currentStatus].includes(newStatus)) {
-    throw new AppError('Invalid status transition: dispute must be APPROVED', 409, '40903');
-  }
+  validateTransition(currentStatus, newStatus);
 
   const allowedNetworks = ['Visa', 'Mastercard'];
   if (!allowedNetworks.includes(network)) {
@@ -651,9 +614,7 @@ async function refundDispute(disputeId, operatorId, refundAmount, currency, refu
   const currentStatus = dispute.status;
   const newStatus = 'REFUND_COMPLETED';
 
-  if (!VALID_TRANSITIONS[currentStatus] || !VALID_TRANSITIONS[currentStatus].includes(newStatus)) {
-    throw new AppError('Invalid status transition: dispute must be CHARGEBACK_INITIATED', 409, '40904');
-  }
+  validateTransition(currentStatus, newStatus);
 
   if (refundAmount === undefined || refundAmount === null || typeof refundAmount !== 'number' || refundAmount <= 0) {
     throw new AppError('Invalid refundAmount', 400, '40050');
@@ -719,9 +680,7 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
   const currentStatus = dispute.status;
   const newStatus = 'CLOSED';
 
-  if (!VALID_TRANSITIONS[currentStatus] || !VALID_TRANSITIONS[currentStatus].includes(newStatus)) {
-    throw new AppError('Invalid status transition: dispute must be REJECTED or REFUND_COMPLETED to be closed', 409, '40905');
-  }
+  validateTransition(currentStatus, newStatus);
 
   const closedDate = new Date().toISOString();
   const historyComment = `Closure reason: ${closureReason} | ${comment}`;
@@ -759,8 +718,20 @@ async function closeDispute(disputeId, operatorId, closureReason, comment) {
 
 // ─── RÉPONSE DU CLIENT À UNE DEMANDE D'INFO ───────────────────────────────
 // WAITING_FOR_INFORMATION → UNDER_REVIEW
-// Note: controller already validates status and ownership before calling this.
 async function respondToInfoRequest(disputeId, userId, comment) {
+  const dispute = await findDisputeById(disputeId);
+  if (!dispute) {
+    throw new AppError('Dispute not found', 404, '40402');
+  }
+
+  if (dispute.status !== 'WAITING_FOR_INFORMATION') {
+    throw new AppError(
+      `Invalid status transition: dispute must be WAITING_FOR_INFORMATION, current status is ${dispute.status}`,
+      409,
+      '40908'
+    );
+  }
+
   const now = new Date().toISOString();
 
   return new Promise((resolve, reject) => {

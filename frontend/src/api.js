@@ -79,6 +79,11 @@ export const cardsAPI = {
   list: (token, userID) => apiCall('GET', '/cards', {}, token, userID),
 };
 
+export const profileAPI = {
+  update: (token, userID, data) => apiCall('PUT', '/me', data, token, userID),
+  changePassword: (token, userID, data) => apiCall('PUT', '/me/password', data, token, userID),
+};
+
 export const disputesAPI = {
   create: (token, userID, payload) => apiCall('POST', '/disputes', payload, token, userID),
   list: (token, userID, filters = {}) => apiCall('GET', '/disputes', filters, token, userID),

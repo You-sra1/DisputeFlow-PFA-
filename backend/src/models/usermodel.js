@@ -18,7 +18,19 @@ function findById(id) {
   });
 }
 
-// Met à jour le mot de passe d'un utilisateur avec un hash bcrypt.
+function updateProfile(id, { name, email }) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      'UPDATE users SET name = ?, email = ? WHERE id = ?',
+      [name, email, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes);
+      }
+    );
+  });
+}
+
 function updatePassword(id, passwordHash) {
   return new Promise((resolve, reject) => {
     db.run('UPDATE users SET password = ? WHERE id = ?', [passwordHash, id], function (err) {
@@ -28,4 +40,4 @@ function updatePassword(id, passwordHash) {
   });
 }
 
-module.exports = { findByEmail, findById, updatePassword };
+module.exports = { findByEmail, findById, updateProfile, updatePassword };
