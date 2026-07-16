@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { createDispute, getDisputes, getDisputeById, respondToInfoRequest,
   getDisputeHistory, getDisputeComments, getDisputeDocuments, uploadDisputeDocument, getDocumentContent } = require('../controllers/disputeController');
-const { review, requestInfo, approve, reject, chargeback, refund, close } = require('../controllers/operatorController');
+const { review, requestInfo, approve, reject, chargeback, merchantResponse, refund, close } = require('../controllers/operatorController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.post('/disputes', authenticate, authorize('CLIENT'), createDispute);
@@ -13,6 +13,7 @@ router.put('/request-info/:id', authenticate, authorize('OPERATOR'), requestInfo
 router.put('/approve/:id', authenticate, authorize('OPERATOR'), approve);
 router.put('/reject/:id', authenticate, authorize('OPERATOR'), reject);
 router.put('/chargeback/:id', authenticate, authorize('OPERATOR'), chargeback);
+router.put('/merchant-response/:id', authenticate, authorize('OPERATOR'), merchantResponse);
 router.put('/refund/:id', authenticate, authorize('OPERATOR'), refund);
 router.put('/close/:id', authenticate, authorize('OPERATOR'), close);
 router.put('/disputes/:id/respond', authenticate, authorize('CLIENT'), respondToInfoRequest);

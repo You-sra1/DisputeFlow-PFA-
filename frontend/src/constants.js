@@ -7,7 +7,7 @@
 // via des contraintes CHECK).
 // ============================================================================
 
-// Les 8 statuts possibles d'un litige, dans l'ordre logique du workflow.
+// Les 9 statuts possibles d'un litige, dans l'ordre logique du workflow.
 export const DISPUTE_STATUSES = [
   'SOUMIS',
   'EN_COURS_D_ANALYSE',
@@ -15,6 +15,7 @@ export const DISPUTE_STATUSES = [
   'APPROUVE',
   'REJETE',
   'CHARGEBACK_INITIE',
+  'REPONSE_MERCHANT_REÇUE',
   'REMBOURSEMENT_EFFECTUE',
   'CLOTURE',
 ];
@@ -27,6 +28,7 @@ export const STATUS_LABELS = {
   APPROUVE: 'Approuvé',
   REJETE: 'Rejeté',
   CHARGEBACK_INITIE: 'Chargeback initié',
+  REPONSE_MERCHANT_REÇUE: 'Réponse marchand reçue',
   REMBOURSEMENT_EFFECTUE: 'Remboursement effectué',
   CLOTURE: 'Clôturé',
 };
@@ -40,6 +42,7 @@ export const STATUS_COLORS = {
   APPROUVE: '#38a169',
   REJETE: '#e53e3e',
   CHARGEBACK_INITIE: '#4299e1',
+  REPONSE_MERCHANT_REÇUE: '#805ad5',
   REMBOURSEMENT_EFFECTUE: '#718096',
   CLOTURE: '#718096',
 };
@@ -62,4 +65,4 @@ export const REASON_LABELS = Object.fromEntries(DISPUTE_REASONS.map((r) => [r.va
 // Regroupement simplifié utilisé pour les compteurs des cartes KPI :
 // un statut "En cours" englobe tout ce qui n'est ni terminal ni approuvé.
 export const IN_PROGRESS_STATUSES = ['EN_COURS_D_ANALYSE', 'EN_ATTENTE_D_INFORMATIONS'];
-export const APPROVED_LIKE_STATUSES = ['APPROUVE', 'CHARGEBACK_INITIE', 'REMBOURSEMENT_EFFECTUE'];
+export const APPROVED_LIKE_STATUSES = ['APPROUVE', 'CHARGEBACK_INITIE', 'REPONSE_MERCHANT_REÇUE', 'REMBOURSEMENT_EFFECTUE'];

@@ -159,4 +159,25 @@ async function close(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { review, requestInfo, approve, reject, chargeback, refund, close };
+async function merchantResponse(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { requestInfo, merchantDecision, comment } = req.body;
+    const operatorId = req.user.id;
+
+    validateRequestInfo(requestInfo);
+    if (!id) throw new AppError('Missing dispute ID', 400, '40030');
+
+    const allowedDecisions = ['ACCEPTED', 'PARTIALLY_ACCEPTED', 'REJECTED'];
+    if (!merchantDecision || !allowedDecisions.includes(merchantDecision)) {
+      throw new AppError('Missing or invalid merchantDecision', 400, '40045');
+    }
+
+    const result = await disputeService.merchantResponse(id, operatorId, merchantDecision, comment || '');
+    return res.status(200).json(successResponse({
+      dispute_id: result.dispute_id, status: result.status, merchant_decision: result.merchant_decision,
+    }));
+  } catch (err) { next(err); }
+}
+
+module.exports = { review, requestInfo, approve, reject, chargeback, merchantResponse, refund, close };

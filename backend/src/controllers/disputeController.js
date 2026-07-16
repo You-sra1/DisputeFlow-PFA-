@@ -59,7 +59,7 @@ async function createDispute(req, res, next) {
 
 const VALID_STATUSES = [
   'SOUMIS', 'EN_COURS_D_ANALYSE', 'EN_ATTENTE_D_INFORMATIONS', 'APPROUVE',
-  'REJETE', 'CHARGEBACK_INITIE', 'REMBOURSEMENT_EFFECTUE', 'CLOTURE',
+  'REJETE', 'CHARGEBACK_INITIE', 'REPONSE_MERCHANT_REÇUE', 'REMBOURSEMENT_EFFECTUE', 'CLOTURE',
 ];
 
 async function getDisputes(req, res, next) {

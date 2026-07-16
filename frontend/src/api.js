@@ -256,7 +256,16 @@ export function initiateChargeback(token, userID, disputeId, { chargebackReasonC
   });
 }
 
-/** PUT /refund/:id — remboursement (CHARGEBACK_INITIE → REMBOURSEMENT_EFFECTUE) */
+/** PUT /merchant-response/:id — réponse du marchand (CHARGEBACK_INITIE → REPONSE_MERCHANT_REÇUE) */
+export function merchantResponse(token, userID, disputeId, { merchantDecision, comment }) {
+  return request(`/merchant-response/${disputeId}`, {
+    method: 'PUT',
+    token,
+    body: { requestInfo: buildRequestInfo(userID), merchantDecision, comment },
+  });
+}
+
+/** PUT /refund/:id — remboursement (REPONSE_MERCHANT_REÇUE → REMBOURSEMENT_EFFECTUE) */
 export function processRefund(token, userID, disputeId, { refundAmount, currency, refundMethod }) {
   return request(`/refund/${disputeId}`, {
     method: 'PUT',

@@ -6,7 +6,7 @@
 // pièces justificatives (dispute_documents, cliquables pour être ouvertes),
 // et selon le rôle :
 //   - OPERATOR : les boutons d'action disponibles pour le statut courant
-//     (review, request-info, approve, reject, chargeback, refund, close)
+//     (review, request-info, approve, reject, chargeback, merchant-response, refund, close)
 //   - CLIENT : lecture seule, sauf un champ de réponse si le statut est
 //     EN_ATTENTE_D_INFORMATIONS
 // ============================================================================
@@ -190,6 +190,7 @@ export default function DisputeDetail() {
           onApprove={(comment) => runAction(() => api.approveDispute(token, user.id, id, comment))}
           onReject={(reason, comment) => runAction(() => api.rejectDispute(token, user.id, id, reason, comment))}
           onChargeback={(payload) => runAction(() => api.initiateChargeback(token, user.id, id, payload))}
+          onMerchantResponse={(payload) => runAction(() => api.merchantResponse(token, user.id, id, payload))}
           onRefund={(payload) => runAction(() => api.processRefund(token, user.id, id, payload))}
           onClose={(payload) => runAction(() => api.closeDispute(token, user.id, id, payload))}
         />
@@ -238,11 +239,12 @@ function ClientResponseForm({ onSubmit, disabled }) {
 }
 
 /** Panneau d'actions opérateur, dont le contenu dépend du statut courant. */
-function OperatorActions({ status, disabled, onReview, onRequestInfo, onApprove, onReject, onChargeback, onRefund, onClose }) {
+function OperatorActions({ status, disabled, onReview, onRequestInfo, onApprove, onReject, onChargeback, onMerchantResponse, onRefund, onClose }) {
   const [comment, setComment] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [chargebackReasonCode, setChargebackReasonCode] = useState('');
   const [network, setNetwork] = useState('Visa');
+  const [merchantDecision, setMerchantDecision] = useState('ACCEPTED');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundCurrency, setRefundCurrency] = useState('USD');
   const [refundMethod, setRefundMethod] = useState('CARD_CREDIT');
@@ -314,6 +316,23 @@ function OperatorActions({ status, disabled, onReview, onRequestInfo, onApprove,
         )}
 
         {status === 'CHARGEBACK_INITIE' && (
+          <div className="inline-form">
+            <select value={merchantDecision} onChange={(e) => setMerchantDecision(e.target.value)}>
+              <option value="ACCEPTED">Accepted</option>
+              <option value="PARTIALLY_ACCEPTED">Partially Accepted</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+            <button
+              className="btn-primary"
+              disabled={disabled}
+              onClick={() => onMerchantResponse({ merchantDecision, comment })}
+            >
+              Record Merchant Response
+            </button>
+          </div>
+        )}
+
+        {status === 'REPONSE_MERCHANT_REÇUE' && (
           <div className="inline-form">
             <input type="number" step="0.01" placeholder="Refund amount" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} />
             <input type="text" placeholder="Currency" value={refundCurrency} onChange={(e) => setRefundCurrency(e.target.value)} />

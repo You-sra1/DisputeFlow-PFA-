@@ -174,6 +174,7 @@ async function seedDisputes() {
     { id: 'DSP008', transactionId: 'TXN004', userId: 'CLIENT002', reason: 'ATM_CASH_NOT_DISPENSED', description: 'Le distributeur n\'a pas remis les billets mais le compte a été débité.', amount: 320.00, currency: 'USD', status: 'REMBOURSEMENT_EFFECTUE', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-06-10 08:00:00', updatedAt: '2026-06-15 15:00:00' },
     { id: 'DSP009', transactionId: 'TXN002', userId: 'CLIENT001', reason: 'OTHER', description: 'Je conteste cette transaction pour motif divers non listé.', amount: 14.99, currency: 'USD', status: 'CLOTURE', priority: 'LOW', assignedTo: 'OPERATOR001', createdAt: '2026-06-05 09:00:00', updatedAt: '2026-06-08 09:00:00' },
     { id: 'DSP010', transactionId: 'TXN005', userId: 'CLIENT002', reason: 'UNAUTHORIZED_TRANSACTION', description: 'Transaction non autorisée détectée après vérification du relevé.', amount: 89.99, currency: 'USD', status: 'CLOTURE', priority: 'NORMAL', assignedTo: 'OPERATOR001', createdAt: '2026-06-01 08:00:00', updatedAt: '2026-06-07 09:00:00' },
+    { id: 'DSP011', transactionId: 'TXN006', userId: 'CLIENT001', reason: 'GOODS_NOT_RECEIVED', description: 'Commande Apple Store jamais réceptionnée malgré le paiement confirmé.', amount: 199.99, currency: 'USD', status: 'REPONSE_MERCHANT_REÇUE', priority: 'HIGH', assignedTo: 'OPERATOR001', createdAt: '2026-06-12 10:00:00', updatedAt: '2026-06-20 14:00:00' },
   ];
 
   for (const d of disputes) {
@@ -246,6 +247,12 @@ async function seedStatusHistory() {
     { id: 'HIST033', disputeId: 'DSP010', fromStatus: 'APPROUVE',     toStatus: 'CHARGEBACK_INITIE', changedBy: 'OPERATOR001', reason: 'Chargeback en cours de traitement',                   createdAt: '2026-06-04 09:00:00' },
     { id: 'HIST034', disputeId: 'DSP010', fromStatus: 'CHARGEBACK_INITIE', toStatus: 'REMBOURSEMENT_EFFECTUE', changedBy: 'OPERATOR001', reason: 'Remboursement validé',                       createdAt: '2026-06-06 15:00:00' },
     { id: 'HIST035', disputeId: 'DSP010', fromStatus: 'REMBOURSEMENT_EFFECTUE', toStatus: 'CLOTURE', changedBy: 'OPERATOR001', reason: 'Litige clôturé avec succès',                          createdAt: '2026-06-07 09:00:00' },
+    // ── DSP011 : SOUMIS → ... → CHARGEBACK_INITIE → REPONSE_MERCHANT_REÇUE ──
+    { id: 'HIST036', disputeId: 'DSP011', fromStatus: null,           toStatus: 'SOUMIS',  changedBy: 'CLIENT001',  reason: 'Client a soumis le litige',                                      createdAt: '2026-06-12 10:00:00' },
+    { id: 'HIST037', disputeId: 'DSP011', fromStatus: 'SOUMIS',    toStatus: 'EN_COURS_D_ANALYSE', changedBy: 'OPERATOR001', reason: 'Analyse du litige en cours',                                createdAt: '2026-06-13 09:00:00' },
+    { id: 'HIST038', disputeId: 'DSP011', fromStatus: 'EN_COURS_D_ANALYSE', toStatus: 'APPROUVE',   changedBy: 'OPERATOR001', reason: 'Litige justifié, commande non réceptionnée',               createdAt: '2026-06-15 11:00:00' },
+    { id: 'HIST039', disputeId: 'DSP011', fromStatus: 'APPROUVE',     toStatus: 'CHARGEBACK_INITIE', changedBy: 'OPERATOR001', reason: 'Chargeback lancé Visa',                            createdAt: '2026-06-17 10:00:00' },
+    { id: 'HIST040', disputeId: 'DSP011', fromStatus: 'CHARGEBACK_INITIE', toStatus: 'REPONSE_MERCHANT_REÇUE', changedBy: 'OPERATOR001', reason: 'Marchand a confirmé la non-livraison',        createdAt: '2026-06-20 14:00:00' },
   ];
 
   for (const h of entries) {
@@ -320,6 +327,12 @@ async function seedComments() {
     { id: 'CMT036', disputeId: 'DSP010', userId: 'OPERATOR001', comment: 'Réponse du marchand reçue, pas d\'objection au remboursement.', createdAt: '2026-06-05 11:00:00' },
     { id: 'CMT037', disputeId: 'DSP010', userId: 'OPERATOR001', comment: 'Remboursement validé.', createdAt: '2026-06-06 15:00:00' },
     { id: 'CMT038', disputeId: 'DSP010', userId: 'OPERATOR001', comment: 'Litige clôturé avec succès.', createdAt: '2026-06-07 09:00:00' },
+    // ── DSP011 (REPONSE_MERCHANT_REÇUE) ──────────────────────────────────────
+    { id: 'CMT039', disputeId: 'DSP011', userId: 'CLIENT001', comment: 'Commande Apple Store jamais réceptionnée.', createdAt: '2026-06-12 10:00:00' },
+    { id: 'CMT040', disputeId: 'DSP011', userId: 'OPERATOR001', comment: 'Analyse du litige en cours.', createdAt: '2026-06-13 09:00:00' },
+    { id: 'CMT041', disputeId: 'DSP011', userId: 'OPERATOR001', comment: 'Commande non réceptionnée confirmée. Litige approuvé.', createdAt: '2026-06-15 11:00:00' },
+    { id: 'CMT042', disputeId: 'DSP011', userId: 'OPERATOR001', comment: 'Chargeback lancé via Visa.', createdAt: '2026-06-17 10:00:00' },
+    { id: 'CMT043', disputeId: 'DSP011', userId: 'OPERATOR001', comment: 'Réponse du marchand reçue : non-livraison confirmée.', createdAt: '2026-06-20 14:00:00' },
   ];
 
   for (const c of comments) {
@@ -374,7 +387,7 @@ async function main() {
     console.log('║  Seed terminé avec succès.                              ║');
     console.log('║  Comptes : Password123                                  ║');
     console.log('║  3 utilisateurs | 2 cartes | 5 transactions            ║');
-    console.log('║  10 litiges | 38 historiques | 38 commentaires         ║');
+    console.log('║  11 litiges | 40 historiques | 43 commentaires         ║');
     console.log('║  2 pièces justificatives                                ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
   } catch (err) {

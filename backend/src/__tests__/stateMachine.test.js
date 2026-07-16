@@ -7,13 +7,14 @@ describe('VALID_TRANSITIONS', () => {
     EN_COURS_D_ANALYSE:        ['EN_ATTENTE_D_INFORMATIONS', 'APPROUVE', 'REJETE'],
     EN_ATTENTE_D_INFORMATIONS: ['EN_COURS_D_ANALYSE', 'APPROUVE', 'REJETE'],
     APPROUVE:                  ['CHARGEBACK_INITIE'],
-    CHARGEBACK_INITIE:         ['REMBOURSEMENT_EFFECTUE'],
+    CHARGEBACK_INITIE:         ['REPONSE_MERCHANT_REÇUE'],
+    REPONSE_MERCHANT_REÇUE:    ['REMBOURSEMENT_EFFECTUE'],
     REMBOURSEMENT_EFFECTUE:    ['CLOTURE'],
     REJETE:                    ['CLOTURE'],
     CLOTURE:                   [],
   };
 
-  it('should contain exactly the 8 expected statuses', () => {
+  it('should contain exactly the 9 expected statuses', () => {
     expect(Object.keys(VALID_TRANSITIONS).sort()).toEqual(Object.keys(expectedTransitions).sort());
   });
 
@@ -41,7 +42,8 @@ describe('validateTransition', () => {
     expect(validateTransition('EN_COURS_D_ANALYSE', 'REJETE')).toBe(true);
     expect(validateTransition('EN_COURS_D_ANALYSE', 'EN_ATTENTE_D_INFORMATIONS')).toBe(true);
     expect(validateTransition('APPROUVE', 'CHARGEBACK_INITIE')).toBe(true);
-    expect(validateTransition('CHARGEBACK_INITIE', 'REMBOURSEMENT_EFFECTUE')).toBe(true);
+    expect(validateTransition('CHARGEBACK_INITIE', 'REPONSE_MERCHANT_REÇUE')).toBe(true);
+    expect(validateTransition('REPONSE_MERCHANT_REÇUE', 'REMBOURSEMENT_EFFECTUE')).toBe(true);
     expect(validateTransition('REMBOURSEMENT_EFFECTUE', 'CLOTURE')).toBe(true);
     expect(validateTransition('REJETE', 'CLOTURE')).toBe(true);
     expect(validateTransition('EN_ATTENTE_D_INFORMATIONS', 'EN_COURS_D_ANALYSE')).toBe(true);
@@ -84,6 +86,7 @@ describe('validateTransition', () => {
     expect(() => validateTransition('SOUMIS', 'APPROUVE')).toThrow(AppError);
     expect(() => validateTransition('SOUMIS', 'CHARGEBACK_INITIE')).toThrow(AppError);
     expect(() => validateTransition('APPROUVE', 'REMBOURSEMENT_EFFECTUE')).toThrow(AppError);
+    expect(() => validateTransition('CHARGEBACK_INITIE', 'REMBOURSEMENT_EFFECTUE')).toThrow(AppError);
   });
 });
 
@@ -92,6 +95,8 @@ describe('getAllowedTransitions', () => {
     expect(getAllowedTransitions('SOUMIS')).toEqual(['EN_COURS_D_ANALYSE']);
     expect(getAllowedTransitions('EN_COURS_D_ANALYSE')).toEqual(['EN_ATTENTE_D_INFORMATIONS', 'APPROUVE', 'REJETE']);
     expect(getAllowedTransitions('APPROUVE')).toEqual(['CHARGEBACK_INITIE']);
+    expect(getAllowedTransitions('CHARGEBACK_INITIE')).toEqual(['REPONSE_MERCHANT_REÇUE']);
+    expect(getAllowedTransitions('REPONSE_MERCHANT_REÇUE')).toEqual(['REMBOURSEMENT_EFFECTUE']);
     expect(getAllowedTransitions('CLOTURE')).toEqual([]);
   });
 

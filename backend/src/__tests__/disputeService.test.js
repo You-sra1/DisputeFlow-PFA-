@@ -151,8 +151,8 @@ describe('chargebackDispute', () => {
 });
 
 describe('refundDispute', () => {
-  it('should transition CHARGEBACK_INITIE → REMBOURSEMENT_EFFECTUE', async () => {
-    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+  it('should transition REPONSE_MERCHANT_REÇUE → REMBOURSEMENT_EFFECTUE', async () => {
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'REPONSE_MERCHANT_REÇUE', amount: 100, currency: 'USD' });
     disputeModel.updateDisputeStatus.mockResolvedValue({});
 
     const result = await disputeService.refundDispute('DSP001', 'OPERATOR001', 50, 'USD', 'CARD_CREDIT');
@@ -162,24 +162,60 @@ describe('refundDispute', () => {
   });
 
   it('should throw 400 if refundAmount exceeds claim amount', async () => {
-    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'REPONSE_MERCHANT_REÇUE', amount: 100, currency: 'USD' });
 
     await expect(disputeService.refundDispute('DSP001', 'OPERATOR001', 200, 'USD', 'CARD_CREDIT'))
       .rejects.toMatchObject({ statusCode: 400, errorCode: '40051' });
   });
 
   it('should throw 400 for invalid refundMethod', async () => {
-    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'REPONSE_MERCHANT_REÇUE', amount: 100, currency: 'USD' });
 
     await expect(disputeService.refundDispute('DSP001', 'OPERATOR001', 50, 'USD', 'CHECK'))
       .rejects.toMatchObject({ statusCode: 400, errorCode: '40053' });
   });
 
   it('should throw 400 if currency mismatches', async () => {
-    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'REPONSE_MERCHANT_REÇUE', amount: 100, currency: 'USD' });
 
     await expect(disputeService.refundDispute('DSP001', 'OPERATOR001', 50, 'EUR', 'CARD_CREDIT'))
       .rejects.toMatchObject({ statusCode: 400, errorCode: '40052' });
+  });
+});
+
+describe('merchantResponse', () => {
+  it('should transition CHARGEBACK_INITIE → REPONSE_MERCHANT_REÇUE', async () => {
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+    disputeModel.updateDisputeStatus.mockResolvedValue({});
+
+    const result = await disputeService.merchantResponse('DSP001', 'OPERATOR001', 'ACCEPTED', 'Merchant confirmed');
+
+    expect(result.status).toBe('REPONSE_MERCHANT_REÇUE');
+    expect(result.merchant_decision).toBe('ACCEPTED');
+  });
+
+  it('should accept PARTIALLY_ACCEPTED decision', async () => {
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+    disputeModel.updateDisputeStatus.mockResolvedValue({});
+
+    const result = await disputeService.merchantResponse('DSP001', 'OPERATOR001', 'PARTIALLY_ACCEPTED', '');
+
+    expect(result.status).toBe('REPONSE_MERCHANT_REÇUE');
+    expect(result.merchant_decision).toBe('PARTIALLY_ACCEPTED');
+  });
+
+  it('should throw 400 for invalid merchantDecision', async () => {
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'CHARGEBACK_INITIE', amount: 100, currency: 'USD' });
+
+    await expect(disputeService.merchantResponse('DSP001', 'OPERATOR001', 'INVALID', ''))
+      .rejects.toMatchObject({ statusCode: 400, errorCode: '40045' });
+  });
+
+  it('should throw 409 if status is not CHARGEBACK_INITIE', async () => {
+    disputeModel.findDisputeById.mockResolvedValue({ id: 'DSP001', status: 'SOUMIS', amount: 100, currency: 'USD' });
+
+    await expect(disputeService.merchantResponse('DSP001', 'OPERATOR001', 'ACCEPTED', ''))
+      .rejects.toMatchObject({ statusCode: 409, errorCode: '40910' });
   });
 });
 

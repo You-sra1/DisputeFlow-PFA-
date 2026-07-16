@@ -8,7 +8,8 @@ const VALID_TRANSITIONS = {
   EN_COURS_D_ANALYSE:            ['EN_ATTENTE_D_INFORMATIONS', 'APPROUVE', 'REJETE'],
   EN_ATTENTE_D_INFORMATIONS:     ['EN_COURS_D_ANALYSE', 'APPROUVE', 'REJETE'],
   APPROUVE:                      ['CHARGEBACK_INITIE'],
-  CHARGEBACK_INITIE:             ['REMBOURSEMENT_EFFECTUE'],
+  CHARGEBACK_INITIE:             ['REPONSE_MERCHANT_REÇUE'],
+  REPONSE_MERCHANT_REÇUE:         ['REMBOURSEMENT_EFFECTUE'],
   REMBOURSEMENT_EFFECTUE:        ['CLOTURE'],
   REJETE:                        ['CLOTURE'],
   CLOTURE:                       [],
@@ -167,6 +168,35 @@ async function chargebackDispute(disputeId, operatorId, chargebackReasonCode, ne
   }
 }
 
+async function merchantResponse(disputeId, operatorId, merchantDecision, comment) {
+  const dispute = await disputeModel.findDisputeById(disputeId);
+  if (!dispute) throw new AppError('Dispute not found', 404, '40402');
+
+  const currentStatus = dispute.status;
+  const newStatus = 'REPONSE_MERCHANT_REÇUE';
+  validateTransition(currentStatus, newStatus);
+
+  const allowedDecisions = ['ACCEPTED', 'PARTIALLY_ACCEPTED', 'REJECTED'];
+  if (!allowedDecisions.includes(merchantDecision)) {
+    throw new AppError('Invalid merchantDecision, must be ACCEPTED, PARTIALLY_ACCEPTED, or REJECTED', 400, '40045');
+  }
+
+  const now = new Date().toISOString();
+  const historyComment = `Merchant response received: ${merchantDecision}${comment ? ` — ${comment}` : ''}`;
+
+  await disputeModel.beginTransaction();
+  try {
+    await disputeModel.updateDisputeStatus(disputeId, newStatus, now);
+    await recordStatusChange(disputeId, currentStatus, newStatus, operatorId, historyComment);
+    await recordComment(disputeId, operatorId, historyComment);
+    await disputeModel.commit();
+    return { dispute_id: disputeId, status: newStatus, merchant_decision: merchantDecision };
+  } catch (err) {
+    await disputeModel.rollback();
+    throw new AppError('Internal server error', 500, '50000');
+  }
+}
+
 async function refundDispute(disputeId, operatorId, refundAmount, currency, refundMethod) {
   const dispute = await disputeModel.findDisputeById(disputeId);
   if (!dispute) throw new AppError('Dispute not found', 404, '40402');
@@ -303,6 +333,7 @@ module.exports = {
   approveDispute,
   rejectDispute,
   chargebackDispute,
+  merchantResponse,
   refundDispute,
   closeDispute,
   respondToInfoRequest,
